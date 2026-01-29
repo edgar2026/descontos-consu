@@ -77,8 +77,9 @@ const App: React.FC = () => {
     switch (currentPage) {
       // Consultor Screens
       case 'dashboard_consultor':
+        return <ConsultorDashboard onNavigate={handleNavigate} view="dashboard" />;
       case 'solicitacoes':
-        return <ConsultorDashboard onNavigate={handleNavigate} />;
+        return <ConsultorDashboard onNavigate={handleNavigate} view="list" />;
       case 'nova_solicitacao':
         return <NovaSolicitacao onBack={() => handleNavigate('dashboard_consultor')} />;
       case 'visualizar_solicitacao':
