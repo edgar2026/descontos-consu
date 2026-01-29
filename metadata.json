@@ -1,0 +1,5 @@
+{
+  "name": "Portal de Descontos Acadêmicos",
+  "description": "Sistema corporativo interno para gestão de solicitações de descontos acadêmicos, com perfis diferenciados para Consultores, Coordenadores e Administradores.",
+  "requestFramePermissions": []
+}
