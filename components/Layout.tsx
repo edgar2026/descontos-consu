@@ -135,6 +135,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeRole, onNavigate, curre
         {/* Content Viewport */}
         <main className="flex-1 overflow-y-auto p-8">
           {children}
+
+          <footer className="mt-12 py-8 border-t border-gray-100 text-center no-print">
+            <p className="text-sm text-gray-400">
+              © 2025 UNINASSAU. Todos os direitos reservados.
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Desenvolvido por <span className="font-bold text-gray-500">Edgar Tavares</span>.
+            </p>
+          </footer>
         </main>
       </div>
     </div>
