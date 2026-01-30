@@ -24,6 +24,8 @@ const Login: React.FC = () => {
       const result = await signIn.create({ identifier: email, password });
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
+      } else if (result.status === 'needs_second_factor') {
+        setError('Segurança adicional necessária: Sua conta possui autenticação de dois fatores (2FA) ativada. Por favor, desative o 2FA no painel do Clerk para este ambiente de teste ou aguarde a implementação do segundo fator.');
       } else {
         setError(`Ação necessária: ${result.status}`);
       }

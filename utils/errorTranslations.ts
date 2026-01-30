@@ -24,6 +24,10 @@ export const translateClerkError = (err: any): string => {
             return 'Este e-mail já está cadastrado no sistema.';
         case 'session_exists':
             return 'Você já possui uma sessão ativa.';
+        case 'user_locked':
+            return 'Conta temporariamente bloqueada por excesso de tentativas. Tente novamente em alguns minutos.';
+        case 'needs_second_factor':
+            return 'Autenticação de dois fatores necessária.';
         default:
             // Fallback para mensagens específicas que contenham palavras-chave
             if (message.includes('breach') || message.includes('pwned')) {
