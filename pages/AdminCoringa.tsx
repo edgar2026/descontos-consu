@@ -260,17 +260,35 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
         'Curso': (s.curso?.nome_curso || 'N/A').toUpperCase(),
         'Consultor': (s.consultor?.nome || s.consultor?.email || 'N/A').toUpperCase(),
         'Ingresso': (s.tipo_ingresso || 'N/A').toUpperCase(),
-        'Mens. Máxima': mensBruta,
+        'Mens. Máxima (R$)': mensBruta,
         'Desc. Padrão (%)': descPadrao,
-        'Mensalidade após Desc. Inicial': liquidoPadrao,
+        'Mensalidade após Desc. Inicial (R$)': liquidoPadrao,
         'Desc. Solicitado (%)': s.desconto_solicitado_percent || 0,
-        'Valor Solicitado': Number(s.mensalidade_solicitada || 0),
+        'Valor Solicitado (R$)': Number(s.mensalidade_solicitada || 0),
         'Status': s.status,
-        'Data': new Date(s.criado_em).toLocaleDateString('pt-BR')
+        'Data Solicitação': new Date(s.criado_em).toLocaleDateString('pt-BR')
       };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(data);
+
+    // Ajustar largura das colunas para ficar "estilizado" e legível
+    const wscols = [
+      { wch: 20 }, // Matrícula
+      { wch: 40 }, // Aluno
+      { wch: 30 }, // Curso
+      { wch: 25 }, // Consultor
+      { wch: 20 }, // Ingresso
+      { wch: 15 }, // Mens. Máxima
+      { wch: 15 }, // Desc. Padrão
+      { wch: 25 }, // Mens. Após Desc
+      { wch: 15 }, // Desc. Solicitado
+      { wch: 15 }, // Valor Solicitado
+      { wch: 20 }, // Status
+      { wch: 15 }, // Data
+    ];
+    worksheet['!cols'] = wscols;
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Solicitações');
 
