@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.60.0",
     "@supabase/supabase-js": "^2.93.2",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",

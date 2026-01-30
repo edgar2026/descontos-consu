@@ -1,9 +1,10 @@
 
 
 import React, { useState } from 'react';
-import { supabase } from '../supabase';
+import { useSignIn } from '@clerk/clerk-react';
 
 const Login: React.FC = () => {
+  const { isLoaded, signIn, setActive } = useSignIn();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -11,18 +12,33 @@ const Login: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLoaded) return;
+
     setLoading(true);
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
+      // Inicia o processo de login
+      const result = await signIn.create({
+        identifier: email,
         password,
       });
 
-      if (error) throw error;
+      // Se o status for completo, define a sessão como ativa
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+      } else {
+        // Caso haja mais passos (como MFA), lidamos aqui (opcional)
+        console.log('Status do login:', result.status);
+        setError('Ação adicional necessária para completar o login.');
+      }
     } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login');
+      console.error('Erro no login:', err);
+      // Traduzindo mensagens de erro comuns do Clerk
+      const msg = err.errors?.[0]?.message || '';
+      if (msg.includes('identifier')) setError('E-mail ou senha incorretos.');
+      else if (msg.includes('password')) setError('E-mail ou senha incorretos.');
+      else setError('Ocorreu um erro ao validar suas credenciais.');
     } finally {
       setLoading(false);
     }
@@ -80,7 +96,7 @@ const Login: React.FC = () => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !isLoaded}
             className="w-full py-4 bg-primary-500 hover:bg-primary-600 text-white font-black rounded-xl shadow-lg shadow-primary-500/30 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
           >
             <span>{loading ? 'ENTRANDO...' : 'ENTRAR NO SISTEMA'}</span>

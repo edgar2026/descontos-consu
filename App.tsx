@@ -18,57 +18,67 @@ import HistoricoCoordenador from './pages/HistoricoCoordenador';
 import { supabase } from './supabase';
 
 
+import { SignedIn, SignedOut, useUser, useAuth, useClerk } from '@clerk/clerk-react';
+
 const App: React.FC = () => {
-  const [session, setSession] = useState<any>(null);
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [currentPage, setCurrentPage] = useState<string>('dashboard');
   const [navigationParams, setNavigationParams] = useState<any>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else {
-        setProfile(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    if (isLoaded && isSignedIn && user) {
+      fetchProfile(user.id, user.primaryEmailAddress?.emailAddress);
+    } else if (isLoaded && !isSignedIn) {
+      setLoadingProfile(false);
+      setProfile(null);
+    }
+  }, [isLoaded, isSignedIn, user]);
 
   const handleNavigate = (page: string, params?: any) => {
     setCurrentPage(page);
     setNavigationParams(params);
   };
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (clerkId: string, email?: string) => {
     try {
-      const { data, error } = await supabase
+      setLoadingProfile(true);
+      // Try to fetch by clerkId first, then fallback to email for migration
+      let { data, error } = await supabase
         .from('users_profile')
         .select('*')
-        .eq('id', userId)
+        .eq('id', clerkId)
         .single();
 
-      if (error) throw error;
-      setProfile(data);
+      if (error && email) {
+        // Fallback: fetch by email if clerkId not found (first time login after migration)
+        const { data: emailData, error: emailError } = await supabase
+          .from('users_profile')
+          .select('*')
+          .eq('email', email)
+          .single();
 
-      // Navigate to correct dashboard based on role
-      if (data.perfil === UserRole.CONSULTOR) handleNavigate('dashboard_consultor');
-      else if (data.perfil === UserRole.COORDENADOR) handleNavigate('dashboard_coordenador');
-      else if (data.perfil === UserRole.ADMIN) handleNavigate('admin_master');
+        if (!emailError && emailData) {
+          data = emailData;
+          // Optionally update the ID in the database to the Clerk ID
+          await supabase.from('users_profile').update({ id: clerkId }).eq('id', emailData.id);
+        }
+      }
+
+      if (data) {
+        setProfile(data);
+        // Navigate based on role
+        if (data.perfil === UserRole.CONSULTOR) handleNavigate('dashboard_consultor');
+        else if (data.perfil === UserRole.COORDENADOR) handleNavigate('dashboard_coordenador');
+        else if (data.perfil === UserRole.ADMIN) handleNavigate('admin_master');
+      }
 
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
-      setLoading(false);
+      setLoadingProfile(false);
     }
   };
 
@@ -111,7 +121,7 @@ const App: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (!isLoaded || (isSignedIn && loadingProfile)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
@@ -119,20 +129,23 @@ const App: React.FC = () => {
     );
   }
 
-  if (!session) {
-    return <Login />;
-  }
-
   return (
-    <Layout
-      activeRole={profile?.perfil || UserRole.CONSULTOR}
-      onNavigate={handleNavigate}
-      currentPage={currentPage}
-      userName={profile?.nome}
-      hideSearch={['analise_coordenador', 'analise_diretor', 'visualizar_solicitacao'].includes(currentPage)}
-    >
-      {renderContent()}
-    </Layout>
+    <>
+      <SignedOut>
+        <Login />
+      </SignedOut>
+      <SignedIn>
+        <Layout
+          activeRole={profile?.perfil || UserRole.CONSULTOR}
+          onNavigate={handleNavigate}
+          currentPage={currentPage}
+          userName={profile?.nome}
+          hideSearch={['analise_coordenador', 'analise_diretor', 'visualizar_solicitacao'].includes(currentPage)}
+        >
+          {renderContent()}
+        </Layout>
+      </SignedIn>
+    </>
   );
 };
 

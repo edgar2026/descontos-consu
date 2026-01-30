@@ -12,8 +12,11 @@ interface LayoutProps {
   hideSearch?: boolean;
 }
 
+import { useClerk } from '@clerk/clerk-react';
+
 const Layout: React.FC<LayoutProps> = ({ children, activeRole, onNavigate, currentPage, userName, hideSearch }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const { signOut } = useClerk();
 
   const menuItems = {
     [UserRole.CONSULTOR]: [
@@ -31,7 +34,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeRole, onNavigate, curre
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut();
   };
 
   return (
