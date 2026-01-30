@@ -13,7 +13,7 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [step, setStep] = useState<'login' | 'forgot-password' | 'reset-password'>('login');
+  const [step, setStep] = useState<'login' | 'forgot-password' | 'reset-password' | 'verify-2fa'>('login');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +25,7 @@ const Login: React.FC = () => {
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
       } else if (result.status === 'needs_second_factor') {
-        setError('Segurança adicional necessária: Sua conta possui autenticação de dois fatores (2FA) ativada. Por favor, desative o 2FA no painel do Clerk para este ambiente de teste ou aguarde a implementação do segundo fator.');
+        setStep('verify-2fa');
       } else {
         setError(`Ação necessária: ${result.status}`);
       }
@@ -69,6 +69,28 @@ const Login: React.FC = () => {
         await setActive({ session: result.createdSessionId });
       } else {
         setError('Não foi possível completar. Verifique o código.');
+      }
+    } catch (err: any) {
+      setError(translateClerkError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isLoaded) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await signIn.attemptSecondFactor({
+        strategy: 'totp',
+        code,
+      });
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+      } else {
+        setError('Não foi possível verificar. Verifique o código digitado.');
       }
     } catch (err: any) {
       setError(translateClerkError(err));
@@ -206,6 +228,55 @@ const Login: React.FC = () => {
             <button type="button" onClick={() => setStep('forgot-password')} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors flex items-center justify-center gap-1">
               <span className="material-symbols-outlined text-sm">refresh</span>
               Reenviar código
+            </button>
+          </form>
+        )}
+
+        {step === 'verify-2fa' && (
+          <form className="p-10 space-y-6" onSubmit={handleVerify2FA}>
+            <div className="text-center mb-6">
+              <div className="size-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 mx-auto mb-4 border border-amber-100 shadow-sm shadow-amber-500/10">
+                <span className="material-symbols-outlined text-4xl">verified_user</span>
+              </div>
+              <h3 className="font-black text-gray-900 uppercase tracking-tight">Verificação em 2 Etapas</h3>
+              <p className="text-[11px] text-gray-500 mt-2 font-medium leading-relaxed">
+                Insira o código de 6 dígitos gerado pelo seu aplicativo de autenticação.
+              </p>
+            </div>
+
+            {error && (
+              <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-[11px] font-bold rounded-xl flex items-start gap-2">
+                <span className="material-symbols-outlined text-sm">error</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center block">Código de Segurança</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">key</span>
+                  <input
+                    type="text"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="000000"
+                    required
+                    autoFocus
+                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border-gray-100 rounded-2xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all text-lg font-mono text-center tracking-[0.6em]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" disabled={loading} className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-2xl shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 mt-4 uppercase tracking-[0.2em] text-xs">
+              <span>{loading ? 'Verificando...' : 'Confirmar Código'}</span>
+              {!loading && <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">security</span>}
+            </button>
+
+            <button type="button" onClick={() => setStep('login')} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors flex items-center justify-center gap-1">
+              <span className="material-symbols-outlined text-sm">arrow_back</span>
+              Voltar para o Login
             </button>
           </form>
         )}
