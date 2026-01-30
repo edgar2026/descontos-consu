@@ -7,9 +7,17 @@ export enum UserRole {
 }
 
 export enum RequestStatus {
-  EM_ANALISE = 'EM_ANALISE',
+  AGUARDANDO_DIRETOR = 'AGUARDANDO_DIRETOR',
+  AGUARDANDO_COORDENADOR = 'AGUARDANDO_COORDENADOR',
   DEFERIDO = 'DEFERIDO',
   INDEFERIDO = 'INDEFERIDO',
+}
+
+export enum TipoIngresso {
+  ENEM = 'ENEM',
+  VESTIBULAR = 'VESTIBULAR',
+  PORTADOR_DIPLOMA = 'PORTADOR DE DIPLOMA',
+  TRANSFERENCIA = 'TRANSFERÊNCIA',
 }
 
 export interface UserProfile {
@@ -26,7 +34,10 @@ export interface Curso {
   nome_curso: string;
   ativo: boolean;
   mensalidade_padrao: number;
-  desconto_padrao: number;
+  desconto_padrao: number; // For Vestibular (Standard)
+  desconto_enem: number;
+  desconto_diploma: number;
+  desconto_transferencia: number;
 }
 
 export interface SolicitacaoDesconto {
@@ -34,6 +45,7 @@ export interface SolicitacaoDesconto {
   inscricao: string;
   cpf_matricula: string;
   nome_aluno: string;
+  tipo_ingresso: TipoIngresso;
   curso_id: string;
   mensalidade_atual: number;
   desconto_atual_percent: number;

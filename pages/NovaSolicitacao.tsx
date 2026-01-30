@@ -17,6 +17,7 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack }) => {
     inscricao: '',
     cpf_matricula: '',
     nome_aluno: '',
+    tipo_ingresso: '' as string,
     curso_id: '',
     mensalidade_atual: 0,
     desconto_atual_percent: 0,
@@ -33,27 +34,51 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack }) => {
   }, []);
 
   const fetchCursos = async () => {
-    const { data } = await supabase.from('cursos').select('*').eq('ativo', true);
+    const { data } = await supabase.from('cursos').select('*').eq('ativo', true).order('nome_curso', { ascending: true });
     if (data) setCursos(data);
+  };
+
+  const calculateDefaultDiscount = (curso: Curso, tipoIngresso: string) => {
+    switch (tipoIngresso) {
+      case 'ENEM': return curso.desconto_enem || 0;
+      case 'VESTIBULAR': return curso.desconto_padrao || 0;
+      case 'PORTADOR DE DIPLOMA': return curso.desconto_diploma || 0;
+      case 'TRANSFERÊNCIA': return curso.desconto_transferencia || 0;
+      default: return curso.desconto_padrao || 0;
+    }
   };
 
   const handleCourseChange = (cursoId: string) => {
     const selectedCourse = cursos.find(c => c.id === cursoId);
     if (selectedCourse) {
       const mensalidade = selectedCourse.mensalidade_padrao || 0;
-      const desconto = selectedCourse.desconto_padrao || 0;
+      const desconto = calculateDefaultDiscount(selectedCourse, formData.tipo_ingresso);
       setFormData({
         ...formData,
         curso_id: cursoId,
         mensalidade_atual: mensalidade,
         desconto_atual_percent: desconto,
-        // Reset requested values to defaults or keep them? 
-        // Let's reset requested discount to the default one too
         desconto_solicitado_percent: desconto,
         mensalidade_solicitada: mensalidade * (1 - (desconto / 100))
       });
     } else {
       setFormData({ ...formData, curso_id: cursoId });
+    }
+  };
+
+  const handleTipoIngressoChange = (tipo: string) => {
+    const selectedCourse = cursos.find(c => c.id === formData.curso_id);
+    if (selectedCourse) {
+      const desconto = calculateDefaultDiscount(selectedCourse, tipo);
+      setFormData({
+        ...formData,
+        tipo_ingresso: tipo,
+        desconto_atual_percent: desconto,
+        desconto_solicitado_percent: desconto,
+        mensalidade_solicitada: formData.mensalidade_atual * (1 - (desconto / 100))
+      });
+    } else {
+      setFormData({ ...formData, tipo_ingresso: tipo });
     }
   };
 
@@ -80,7 +105,7 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack }) => {
         .from('solicitacoes_desconto')
         .insert({
           ...formData,
-          status: RequestStatus.EM_ANALISE,
+          status: RequestStatus.AGUARDANDO_DIRETOR,
           criado_por: user.id
         });
 
@@ -169,6 +194,23 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack }) => {
                   placeholder="Nome do aluno"
                 />
               </div>
+
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tipo de Ingresso</label>
+                <select
+                  required
+                  value={formData.tipo_ingresso}
+                  onChange={e => handleTipoIngressoChange(e.target.value)}
+                  className="w-full rounded-2xl border-gray-100 bg-gray-50/50 py-3 px-4 text-sm focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+                >
+                  <option value="">Selecione o tipo de ingresso...</option>
+                  <option value="ENEM">ENEM</option>
+                  <option value="PORTADOR DE DIPLOMA">PORTADOR DE DIPLOMA</option>
+                  <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
+                  <option value="VESTIBULAR">VESTIBULAR</option>
+                </select>
+              </div>
+
               <div className="md:col-span-2 space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Curso de Interesse</label>
                 <select
@@ -261,9 +303,9 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack }) => {
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50 text-xs font-bold">R$</span>
                     <input
-                      type="number"
+                      type="text"
                       readOnly
-                      value={formData.mensalidade_solicitada}
+                      value={formData.mensalidade_solicitada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       className="w-full rounded-xl border-none bg-white/10 py-3 pl-10 pr-4 text-sm font-black text-white focus:ring-0 cursor-default"
                     />
                   </div>

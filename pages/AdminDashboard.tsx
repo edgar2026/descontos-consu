@@ -29,13 +29,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
 
       if (solicitacoes) {
         const total = solicitacoes.length;
-        const emAnalise = solicitacoes.filter(s => s.status === RequestStatus.EM_ANALISE).length;
+        const agDiretor = solicitacoes.filter(s => s.status === RequestStatus.AGUARDANDO_DIRETOR).length;
         const deferidos = solicitacoes.filter(s => s.status === RequestStatus.DEFERIDO).length;
         const indeferidos = solicitacoes.filter(s => s.status === RequestStatus.INDEFERIDO).length;
 
         setStats([
           { label: 'Total Solicitações', value: total.toString(), change: 'Atualizado', color: 'text-blue-600', bg: 'bg-blue-50', icon: 'list_alt' },
-          { label: 'Em Análise', value: emAnalise.toString(), change: `${((emAnalise / total) * 100 || 0).toFixed(0)}%`, color: 'text-amber-600', bg: 'bg-amber-50', icon: 'pending_actions' },
+          { label: 'Aguardando Diretor', value: agDiretor.toString(), change: `${((agDiretor / total) * 100 || 0).toFixed(0)}%`, color: 'text-amber-600', bg: 'bg-amber-50', icon: 'pending_actions' },
           { label: 'Deferidos', value: deferidos.toString(), change: `${((deferidos / total) * 100 || 0).toFixed(0)}%`, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: 'verified' },
           { label: 'Indeferidos', value: indeferidos.toString(), change: `${((indeferidos / total) * 100 || 0).toFixed(0)}%`, color: 'text-rose-600', bg: 'bg-rose-50', icon: 'cancel' },
         ]);

@@ -17,9 +17,8 @@ const AnaliseCoordenador: React.FC<AnaliseCoordenadorProps> = ({ onBack, solicit
   const [curso, setCurso] = useState<Curso | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<RequestStatus>(RequestStatus.EM_ANALISE);
+  const [status, setStatus] = useState<RequestStatus>(RequestStatus.AGUARDANDO_COORDENADOR);
   const [numeroChamado, setNumeroChamado] = useState('');
-  const [file, setFile] = useState<File | null>(null);
 
   // Modal State
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'success' as 'success' | 'error', redirectOnClose: false });
@@ -56,28 +55,40 @@ const AnaliseCoordenador: React.FC<AnaliseCoordenadorProps> = ({ onBack, solicit
     }
   };
 
+  const handleViewFile = async () => {
+    if (!solicitacao) return;
+    try {
+      const fileName = `solicitacao_${solicitacao.id}.pdf`;
+      const { data, error } = await supabase.storage
+        .from('comprovantes')
+        .createSignedUrl(fileName, 60);
+
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (error: any) {
+      alert('Erro ao abrir comprovante: ' + error.message);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!solicitacao) return;
+    if (status === RequestStatus.AGUARDANDO_COORDENADOR) {
+      setModal({ isOpen: true, title: 'Atenção', message: 'Selecione um status final (Deferido ou Indeferido).', type: 'error' });
+      return;
+    }
     setSaving(true);
 
     try {
-      // 1. Upload file if exists
-      if (file) {
-        const fileName = `solicitacao_${solicitacao.id}.pdf`;
-        const { error: uploadError } = await supabase.storage
-          .from('comprovantes')
-          .upload(fileName, file, { upsert: true });
-
-        if (uploadError) throw uploadError;
-      }
-
-      // 2. Update solicitation
+      // Update solicitation
       const { error: updateError } = await supabase
         .from('solicitacoes_desconto')
         .update({
           status,
           numero_chamado: numeroChamado,
+          atualizado_em: new Date().toISOString()
         })
         .eq('id', solicitacao.id);
 
@@ -85,8 +96,8 @@ const AnaliseCoordenador: React.FC<AnaliseCoordenadorProps> = ({ onBack, solicit
 
       setModal({
         isOpen: true,
-        title: 'Decisão Salva!',
-        message: 'A análise foi registrada com sucesso no sistema.',
+        title: 'Finalizado!',
+        message: 'A solicitação foi concluída e o status atualizado.',
         type: 'success',
         redirectOnClose: true
       });
@@ -119,11 +130,9 @@ const AnaliseCoordenador: React.FC<AnaliseCoordenadorProps> = ({ onBack, solicit
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight">Solicitação do Aluno: {solicitacao.nome_aluno}</h2>
+          <h2 className="text-3xl font-black text-gray-900 tracking-tight">Finalização Coordenador: {solicitacao.nome_aluno}</h2>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-[10px] font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded uppercase tracking-widest">ID: {solicitacao.id.split('-')[0]}</span>
-            <span className="text-gray-400 text-xs">•</span>
-            <p className="text-gray-500 text-xs">Formalize o parecer sobre a solicitação de desconto.</p>
+            <span className="text-[10px] font-black bg-gray-100 text-gray-500 px-2 py-0.5 rounded uppercase tracking-widest">Etapa Final: Abertura de Chamado</span>
           </div>
         </div>
       </div>
@@ -132,8 +141,8 @@ const AnaliseCoordenador: React.FC<AnaliseCoordenadorProps> = ({ onBack, solicit
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm">
             <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-50">
-              <h3 className="font-black text-gray-900 uppercase tracking-widest text-xs">Informações da Solicitação</h3>
-              <span className="text-xs font-mono text-gray-400 uppercase">ID: {solicitacao.id.split('-')[0]}</span>
+              <h3 className="font-black text-gray-900 uppercase tracking-widest text-xs">Dados para Chamado</h3>
+              <StatusBadge status={solicitacao.status} />
             </div>
 
             <div className="grid grid-cols-2 gap-8">
@@ -146,6 +155,10 @@ const AnaliseCoordenador: React.FC<AnaliseCoordenadorProps> = ({ onBack, solicit
                 <p className="text-base font-bold text-gray-900">{curso?.nome_curso}</p>
               </div>
               <div className="space-y-1">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tipo de Ingresso</p>
+                <p className="text-base font-bold text-gray-900">{solicitacao.tipo_ingresso || 'N/A'}</p>
+              </div>
+              <div className="space-y-1">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Matrícula/CPF</p>
                 <p className="text-base font-bold text-gray-900">{solicitacao.cpf_matricula}</p>
               </div>
@@ -155,174 +168,95 @@ const AnaliseCoordenador: React.FC<AnaliseCoordenadorProps> = ({ onBack, solicit
               </div>
             </div>
 
-            <div className="mt-10 bg-gray-50/50 rounded-[2.5rem] p-8 border border-gray-100 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-primary-500/5 rounded-full -mr-48 -mt-48 blur-[100px]"></div>
-
-              <div className="flex items-center gap-4 mb-10 relative">
-                <div className="size-12 rounded-2xl bg-white shadow-sm border border-gray-100 text-primary-500 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-2xl">analytics</span>
-                </div>
-                <div>
-                  <h4 className="font-black text-gray-900 uppercase tracking-[0.2em] text-[10px]">Impacto Financeiro</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Análise comparativa de viabilidade</p>
-                </div>
+            <div className="mt-8 pt-8 border-t border-gray-50 flex items-center justify-between">
+              <div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Comprovante Anexado</h4>
+                <p className="text-xs text-gray-500 italic">Disponibilizado pela Direção Acadêmica</p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
-                {/* Grupo Atual */}
-                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 space-y-8">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cenário Atual</span>
-                    <span className="material-symbols-outlined text-gray-300">history</span>
-                  </div>
-                  <div className="space-y-6">
-                    <div>
-                      <p className="text-[9px] font-black text-gray-400 uppercase mb-2">Valor Bruto Mensal</p>
-                      <p className="text-2xl font-black text-gray-800">
-                        <span className="text-sm font-bold text-gray-400 mr-1.5">R$</span>
-                        {Number(solicitacao.mensalidade_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <div className="pt-6 border-t border-gray-50">
-                      <p className="text-[9px] font-black text-gray-400 uppercase mb-2">Líquido Recebido Hoje</p>
-                      <p className="text-2xl font-black text-gray-800">
-                        <span className="text-sm font-bold text-gray-400 mr-1.5">R$</span>
-                        {(Number(solicitacao.mensalidade_atual) * (1 - Number(solicitacao.desconto_atual_percent) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Grupo Proposto */}
-                <div className="bg-gradient-to-br from-primary-600 to-primary-700 p-8 rounded-[2rem] shadow-xl shadow-primary-500/20 text-white space-y-8 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-                  <div className="flex items-center justify-between relative z-10">
-                    <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Cenário Proposto</span>
-                    <span className="material-symbols-outlined text-white/40 animate-pulse">trending_up</span>
-                  </div>
-                  <div className="space-y-6 relative z-10">
-                    <div>
-                      <p className="text-[9px] font-black text-white/60 uppercase mb-2">Novo Desconto Solicitado</p>
-                      <p className="text-3xl font-black text-white">
-                        {solicitacao.desconto_solicitado_percent}%
-                        <span className="text-sm font-bold ml-2 text-white/60">OFF</span>
-                      </p>
-                    </div>
-                    <div className="pt-6 border-t border-white/10">
-                      <p className="text-[9px] font-black text-white/60 uppercase mb-2">Nova Mensalidade Líquida</p>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-sm font-bold text-white/60">R$</span>
-                        <p className="text-4xl font-black text-white tracking-tight">
-                          {Number(solicitacao.mensalidade_solicitada).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer de Economia */}
-              <div className="mt-8 flex items-center justify-between px-4">
-                <div className="flex items-center gap-4">
-                  <div className="size-14 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                    <span className="material-symbols-outlined text-2xl">savings</span>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Economia Real para o Aluno</p>
-                    <p className="text-xl font-black text-emerald-600">
-                      R$ {(Number(solicitacao.mensalidade_atual) - Number(solicitacao.mensalidade_solicitada)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      <span className="text-xs font-bold ml-2 opacity-60">/mês</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="hidden lg:flex items-center gap-2 text-gray-300">
-                  <span className="material-symbols-outlined text-sm">verified_user</span>
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em]">Cálculo Auditado</span>
-                </div>
-              </div>
+              <button
+                onClick={handleViewFile}
+                className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-600 font-black rounded-xl hover:bg-indigo-100 transition-all text-[10px] uppercase tracking-widest shadow-sm"
+              >
+                <span className="material-symbols-outlined text-xl">download_for_offline</span>
+                Baixar PDF
+              </button>
             </div>
-
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm">
-            <h3 className="text-lg font-black text-gray-900 mb-6 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary-500">notes</span>
-              Observações do Consultor
-            </h3>
-            <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-              <p className="text-sm text-gray-600 leading-relaxed italic">
-                {solicitacao.observacoes || 'Nenhuma observação adicional foi registrada para esta solicitação.'}
-              </p>
+          <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm">
+            <div className="flex items-center gap-4 mb-8">
+              <div className="size-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <span className="material-symbols-outlined text-2xl">payments</span>
+              </div>
+              <div>
+                <h4 className="font-black text-gray-900 uppercase tracking-[0.2em] text-[10px]">Impacto Financeiro</h4>
+                <p className="text-xs text-gray-500 mt-0.5">Resumo da concessão</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-6">
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <p className="text-[9px] font-black text-gray-400 uppercase mb-2">Desconto</p>
+                <p className="text-xl font-black text-gray-800">{solicitacao.desconto_solicitado_percent}%</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <p className="text-[9px] font-black text-gray-400 uppercase mb-2">Novo Líquido</p>
+                <p className="text-xl font-black text-primary-600">R$ {Number(solicitacao.mensalidade_solicitada).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                <p className="text-[9px] font-black text-gray-400 uppercase mb-2">Economia</p>
+                <p className="text-xl font-black text-emerald-600">R$ {(Number(solicitacao.mensalidade_atual) - Number(solicitacao.mensalidade_solicitada)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border-2 border-primary-500 p-8 shadow-xl shadow-primary-500/10">
+          <div className="bg-white rounded-2xl border-2 border-primary-500 p-8 shadow-xl">
             <h3 className="text-lg font-black text-gray-900 mb-6 flex items-center gap-2">
               <span className="material-symbols-outlined text-primary-500">fact_check</span>
-              Parecer Final
+              Formalização
             </h3>
             <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-500 uppercase">Novo Status</label>
+                <label className="text-xs font-bold text-gray-500 uppercase font-red">Número do Chamado (Externo)</label>
+                <input
+                  type="text"
+                  required
+                  value={numeroChamado}
+                  onChange={e => setNumeroChamado(e.target.value)}
+                  placeholder="Ex: 2024-ABC-123"
+                  className="w-full rounded-xl border-gray-200 focus:ring-primary-500 bg-gray-50 py-3"
+                />
+                <p className="text-[9px] text-gray-400 italic mt-1">Insira o ID do chamado aberto no sistema acadêmico</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-500 uppercase">Status Final</label>
                 <select
+                  required
                   value={status}
                   onChange={e => setStatus(e.target.value as RequestStatus)}
-                  className="w-full rounded-xl border-gray-200 focus:ring-primary-500"
+                  className="w-full rounded-xl border-gray-200 focus:ring-primary-500 bg-white py-3"
                 >
-                  <option value={RequestStatus.EM_ANALISE}>Em Análise</option>
+                  <option value={RequestStatus.AGUARDANDO_COORDENADOR}>Escolha uma opção...</option>
                   <option value={RequestStatus.DEFERIDO}>Deferido</option>
                   <option value={RequestStatus.INDEFERIDO}>Indeferido</option>
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-500 uppercase">Número do Chamado</label>
-                <input
-                  type="text"
-                  value={numeroChamado}
-                  onChange={e => setNumeroChamado(e.target.value)}
-                  placeholder="2024-XXXX"
-                  className="w-full rounded-xl border-gray-200 focus:ring-primary-500"
-                />
-              </div>
-              {status !== RequestStatus.EM_ANALISE && (
-                <>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-500 uppercase">Upload Termo (PDF)</label>
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      onChange={e => setFile(e.target.files?.[0] || null)}
-                      className="hidden"
-                      id="pdf-upload"
-                    />
-                    <label
-                      htmlFor="pdf-upload"
-                      className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center transition-colors cursor-pointer text-center ${file ? 'border-primary-500 bg-primary-50' : 'border-gray-100 bg-gray-50 hover:bg-primary-50'}`}
-                    >
-                      <span className={`material-symbols-outlined text-3xl mb-2 ${file ? 'text-primary-500' : 'text-gray-300'}`}>upload_file</span>
-                      <span className={`text-[10px] font-bold uppercase ${file ? 'text-primary-600' : 'text-gray-400'}`}>
-                        {file ? file.name : 'Anexar PDF Assinado'}
-                      </span>
-                    </label>
-                  </div>
 
-                  <div className="bg-amber-50 p-4 rounded-xl flex items-start gap-3">
-                    <span className="material-symbols-outlined text-amber-500 text-sm mt-0.5">warning</span>
-                    <p className="text-[10px] text-amber-800 font-medium leading-tight">
-                      Após deferido, esta solicitação será bloqueada para edição manual. Somente o <span className="font-bold">ADMIN</span> poderá realizar alterações futuras.
-                    </p>
-                  </div>
-                </>
-              )}
+              <div className="bg-blue-50 p-4 rounded-xl flex items-start gap-3 border border-blue-100">
+                <span className="material-symbols-outlined text-blue-500 text-sm">help</span>
+                <p className="text-[10px] text-blue-800 font-medium leading-tight">
+                  O consultor e o aluno serão notificados assim que você salvar o status final.
+                </p>
+              </div>
 
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full py-4 bg-primary-500 hover:bg-primary-600 text-white font-black rounded-xl shadow-lg shadow-primary-500/30 transition-all disabled:opacity-50"
+                className="w-full py-4 bg-gray-900 hover:bg-black text-white font-black rounded-xl shadow-lg transition-all disabled:opacity-50 uppercase tracking-widest text-xs mt-4"
               >
-                {saving ? 'SALVANDO...' : 'SALVAR DECISÃO'}
+                {saving ? 'PROCESSANDO...' : 'FINALIZAR PROCESSO'}
               </button>
             </form>
           </div>

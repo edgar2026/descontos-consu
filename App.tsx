@@ -9,6 +9,7 @@ import NovaSolicitacao from './pages/NovaSolicitacao';
 import VisualizarSolicitacao from './pages/VisualizarSolicitacao';
 import CoordenadorDashboard from './pages/CoordenadorDashboard';
 import AnaliseCoordenador from './pages/AnaliseCoordenador';
+import AnaliseDiretor from './pages/AnaliseDiretor';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminCoringa from './pages/AdminCoringa';
 import GerenciarCursos from './pages/GerenciarCursos';
@@ -62,7 +63,7 @@ const App: React.FC = () => {
       // Navigate to correct dashboard based on role
       if (data.perfil === UserRole.CONSULTOR) handleNavigate('dashboard_consultor');
       else if (data.perfil === UserRole.COORDENADOR) handleNavigate('dashboard_coordenador');
-      else if (data.perfil === UserRole.ADMIN) handleNavigate('dashboard_admin');
+      else if (data.perfil === UserRole.ADMIN) handleNavigate('admin_master');
 
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -96,8 +97,10 @@ const App: React.FC = () => {
       // Admin Screens
       case 'dashboard_admin':
         return <AdminDashboard onNavigate={handleNavigate} />;
+      case 'analise_diretor':
+        return <AnaliseDiretor onBack={() => handleNavigate('dashboard_admin')} solicitationId={navigationParams?.solicitacaoId} />;
       case 'admin_master':
-        return <AdminCoringa />;
+        return <AdminCoringa onNavigate={handleNavigate} />;
       case 'gerenciar_cursos':
         return <GerenciarCursos />;
       case 'gerenciar_usuarios':
@@ -126,7 +129,7 @@ const App: React.FC = () => {
       onNavigate={handleNavigate}
       currentPage={currentPage}
       userName={profile?.nome}
-      hideSearch={['analise_coordenador', 'visualizar_solicitacao'].includes(currentPage)}
+      hideSearch={['analise_coordenador', 'analise_diretor', 'visualizar_solicitacao'].includes(currentPage)}
     >
       {renderContent()}
     </Layout>

@@ -25,10 +25,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeRole, onNavigate, curre
       { id: 'historico', label: 'Histórico', icon: 'history' },
     ],
     [UserRole.ADMIN]: [
+      { id: 'admin_master', label: 'Gerenciamento Master', icon: 'settings_suggest' },
       { id: 'dashboard_admin', label: 'Visão Geral', icon: 'analytics' },
-      { id: 'admin_master', label: 'Gerenciamento', icon: 'settings_suggest' },
-      { id: 'gerenciar_usuarios', label: 'Usuários', icon: 'group' },
-      { id: 'gerenciar_cursos', label: 'Cursos', icon: 'school' },
     ],
   };
 

@@ -125,6 +125,10 @@ const VisualizarSolicitacao: React.FC<VisualizarSolicitacaoProps> = ({ onBack, s
                 <p className="text-sm font-bold text-gray-900">{curso?.nome_curso}</p>
               </div>
               <div className="space-y-1">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tipo de Ingresso</p>
+                <p className="text-sm font-bold text-gray-900">{solicitacao.tipo_ingresso || 'N/A'}</p>
+              </div>
+              <div className="space-y-1">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocolo</p>
                 <p className="text-sm font-bold text-gray-900">{solicitacao.inscricao}</p>
               </div>

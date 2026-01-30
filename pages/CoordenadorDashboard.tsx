@@ -38,7 +38,7 @@ const CoordenadorDashboard: React.FC<CoordenadorDashboardProps> = ({ onNavigate 
             .from('solicitacoes_desconto')
             .select('*')
             .in('curso_id', cursoIds)
-            .eq('status', RequestStatus.EM_ANALISE)
+            .eq('status', RequestStatus.AGUARDANDO_COORDENADOR)
             .order('criado_em', { ascending: false }),
           supabase
             .from('cursos')

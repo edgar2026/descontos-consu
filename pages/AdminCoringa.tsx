@@ -1,6 +1,8 @@
 
 
 import React, { useEffect, useState } from 'react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import StatusBadge from '../components/StatusBadge';
 import ConfirmModal from '../components/ConfirmModal';
 import DetailModal from '../components/DetailModal';
@@ -10,8 +12,12 @@ import { supabase } from '../supabase';
 import { UserProfile, Curso, SolicitacaoDesconto } from '../types';
 import { getDisplayName } from '../utils/nameUtils';
 
-const AdminCoringa: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('usuários');
+interface AdminCoringaProps {
+  onNavigate?: (page: string, params?: any) => void;
+}
+
+const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
+  const [activeTab, setActiveTab] = useState('solicitações');
   const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
@@ -23,7 +29,12 @@ const AdminCoringa: React.FC = () => {
   const [feedbackModal, setFeedbackModal] = useState({ isOpen: false, title: '', message: '', type: 'success' as 'success' | 'error' });
   const [editCourseModal, setEditCourseModal] = useState<{ isOpen: boolean; course: Curso | null }>({ isOpen: false, course: null });
 
-  const tabs = ['usuários', 'cursos', 'solicitações'];
+  const tabs = ['solicitações', 'usuários', 'cursos'];
+
+  // Filters
+  const [filterText, setFilterText] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [pdfTitle, setPdfTitle] = useState('SOLICITAÇÃO DE DESCONTO CONSU');
 
   useEffect(() => {
     fetchData();
@@ -58,7 +69,7 @@ const AdminCoringa: React.FC = () => {
               // Buscar consultor - apenas email
               const { data: consultorData } = await supabase
                 .from('users_profile')
-                .select('email')
+                .select('email, nome')
                 .eq('id', req.criado_por)
                 .maybeSingle();
 
@@ -69,27 +80,10 @@ const AdminCoringa: React.FC = () => {
                 .eq('id', req.curso_id)
                 .maybeSingle();
 
-              // Buscar coordenador responsável pelo curso
-              let coordenadorData = null;
-              if (req.status !== 'EM_ANALISE') {
-                // Se foi deferido ou indeferido, buscar coordenadores do curso
-                const { data: coords } = await supabase
-                  .from('users_profile')
-                  .select('email')
-                  .eq('perfil', 'COORDENADOR')
-                  .eq('ativo', true)
-                  .limit(1);
-
-                if (coords && coords.length > 0) {
-                  coordenadorData = coords[0];
-                }
-              }
-
               return {
                 ...req,
                 consultor: consultorData || null,
-                curso: curso || { nome_curso: 'N/A' },
-                coordenador: coordenadorData
+                curso: curso || { nome_curso: 'N/A' }
               };
             })
           );
@@ -104,6 +98,123 @@ const AdminCoringa: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExportPDF = () => {
+    console.log('Iniciando exportação PDF...');
+    const filtered = getFilteredSolicitacoes();
+    console.log('Solicitações filtradas:', filtered.length);
+    if (filtered.length === 0) {
+      alert('Nenhuma solicitação encontrada para os filtros atuais.');
+      return;
+    }
+
+    try {
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      // Título e Cabeçalho
+      doc.setFontSize(22);
+      doc.setTextColor(17, 24, 39); // Gray-900
+      doc.text(pdfTitle.toUpperCase(), 14, 20);
+
+      doc.setFontSize(10);
+      doc.setTextColor(107, 114, 128); // Gray-500
+      doc.text(`Relatório gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 28);
+      doc.text(`Filtro: ${statusFilter === 'ALL' ? 'Todos os Status' : statusFilter}`, 14, 33);
+
+      const headers = [
+        ['MATRÍCULA / CPF', 'ALUNO', 'CURSO', 'CONSULTOR', 'INGRESSO', 'MENS. MÁXIMA', 'DESC. PADRÃO', 'MENSALIDADE APÓS DESC. INICIAL', 'DESC. SOLIC.', 'VALOR SOLIC.']
+      ];
+
+      const body = filtered.map(s => {
+        const mensBruta = Number(s.mensalidade_atual || 0);
+        const descPadrao = Number(s.desconto_atual_percent || 0);
+        const liquidoPadrao = mensBruta * (1 - descPadrao / 100);
+
+        return [
+          s.cpf_matricula || s.inscricao || 'N/A',
+          (s.nome_aluno || '').toUpperCase(),
+          (s.curso?.nome_curso || 'N/A').toUpperCase(),
+          (s.consultor?.nome || s.consultor?.email || 'N/A').toUpperCase(),
+          (s.tipo_ingresso || 'N/A').toUpperCase(),
+          `R$ ${mensBruta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          `${descPadrao}%`,
+          `R$ ${liquidoPadrao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          `${s.desconto_solicitado_percent || 0}%`,
+          `R$ ${Number(s.mensalidade_solicitada || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        ];
+      });
+
+      autoTable(doc, {
+        head: headers,
+        body: body,
+        startY: 40,
+        styles: {
+          fontSize: 7.5,
+          cellPadding: 2.5,
+          font: 'helvetica',
+          valign: 'middle'
+        },
+        headStyles: {
+          textColor: 255,
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        didParseCell: function (data) {
+          if (data.section === 'head') {
+            // Azul para as informações iniciais (0 a 7 - até Mensalidade após Desconto Inicial)
+            if (data.column.index <= 7) {
+              data.cell.styles.fillColor = [10, 102, 194]; // Primary Blue
+            }
+            // Verde para os detalhes do desconto solicitado (8 e 9)
+            else {
+              data.cell.styles.fillColor = [16, 185, 129]; // Emerald Green
+            }
+          }
+        },
+        didDrawPage: function (data) {
+          const str = "Página " + data.pageNumber;
+          doc.setFontSize(8);
+          doc.setTextColor(156, 163, 175); // Gray-400
+          const pageSize = doc.internal.pageSize;
+          const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+          doc.text(str, data.settings.margin.left, pageHeight - 10);
+        },
+        alternateRowStyles: {
+          fillColor: [249, 250, 251]
+        },
+        columnStyles: {
+          0: { cellWidth: 15 }, // ID
+          1: { cellWidth: 30 }, // ALUNO
+          2: { cellWidth: 40 }, // CURSO
+          3: { cellWidth: 25 }, // CONSULTOR
+          5: { halign: 'right' }, // MENS. MÁXIMA
+          6: { halign: 'center' }, // DESC. PADRÃO
+          7: { halign: 'right' }, // MENSALIDADE APÓS DESC. INICIAL
+          8: { halign: 'center', fontStyle: 'bold' }, // DESC. SOLIC.
+          9: { halign: 'right', fontStyle: 'bold' } // VALOR SOLIC.
+        }
+      });
+
+      const safeTitle = pdfTitle.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      doc.save(`${safeTitle}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err: any) {
+      console.error('Erro no PDF:', err);
+      alert('Erro ao gerar PDF: ' + err.message);
+    }
+  };
+
+  const getFilteredSolicitacoes = () => {
+    return solicitacoes.filter(s => {
+      const matchesSearch = s.nome_aluno.toLowerCase().includes(filterText.toLowerCase()) ||
+        s.inscricao.toLowerCase().includes(filterText.toLowerCase());
+      const matchesStatus = statusFilter === 'ALL' || s.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
   };
 
   const handleDelete = async (type: string, id: string, name: string) => {
@@ -353,7 +464,7 @@ const AdminCoringa: React.FC = () => {
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  <th className="px-6 py-4">ID</th>
+                  <th className="px-6 py-4">Matrícula / CPF</th>
                   <th className="px-6 py-4">Aluno</th>
                   <th className="px-6 py-4">Curso</th>
                   <th className="px-6 py-4">Consultor</th>
@@ -364,20 +475,20 @@ const AdminCoringa: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {solicitacoes.length === 0 ? (
+                {getFilteredSolicitacoes().length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center justify-center text-gray-400">
                         <span className="material-symbols-outlined text-6xl mb-4 opacity-20">inbox</span>
                         <p className="text-sm font-bold">Nenhuma solicitação encontrada</p>
-                        <p className="text-xs mt-1">As solicitações aparecerão aqui quando forem criadas</p>
+                        <p className="text-xs mt-1">As solicitações aparecerão aqui conforme os filtros aplicados</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  solicitacoes.map(req => (
+                  getFilteredSolicitacoes().map(req => (
                     <tr key={req.id} className="hover:bg-gray-50/50">
-                      <td className="px-6 py-4 text-xs font-mono text-gray-400">{req.id.substring(0, 8)}</td>
+                      <td className="px-6 py-4 text-xs font-bold text-gray-500">{req.cpf_matricula || req.inscricao || 'N/A'}</td>
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">{req.nome_aluno}</td>
                       <td className="px-6 py-4 text-xs text-gray-600">{req.curso?.nome_curso || 'N/A'}</td>
                       <td className="px-6 py-4 text-xs text-gray-600">{getDisplayName(req.consultor)}</td>
@@ -386,6 +497,15 @@ const AdminCoringa: React.FC = () => {
                       <td className="px-6 py-4 text-xs text-gray-500">{new Date(req.criado_em).toLocaleDateString('pt-BR')}</td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {req.status === 'AGUARDANDO_DIRETOR' && onNavigate && (
+                            <button
+                              onClick={() => onNavigate('analise_diretor', { solicitacaoId: req.id })}
+                              className="px-3 py-1.5 bg-primary-500 text-white text-[10px] font-black rounded-lg hover:bg-primary-600 transition-all uppercase tracking-widest shadow-lg shadow-primary-500/20 flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-sm">fact_check</span>
+                              Analisar
+                            </button>
+                          )}
                           <button
                             onClick={() => handleViewRequest(req)}
                             className="p-2 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors"
@@ -441,10 +561,31 @@ const AdminCoringa: React.FC = () => {
         </div>
 
         <div className="p-0 min-h-[400px]">
-          <div className="p-6 bg-white flex items-center justify-between border-b border-gray-50">
-            <div className="relative max-w-xs w-full">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
-              <input type="text" placeholder={`Filtrar ${activeTab}...`} className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-xl text-xs focus:ring-2 focus:ring-primary-500/20" />
+          <div className="p-6 bg-white flex flex-col md:flex-row md:items-center justify-between border-b border-gray-50 gap-4">
+            <div className="flex flex-1 gap-4">
+              <div className="relative max-w-xs w-full">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
+                <input
+                  type="text"
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  placeholder={`Filtrar ${activeTab}...`}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-xl text-xs focus:ring-2 focus:ring-primary-500/20"
+                />
+              </div>
+              {activeTab === 'solicitações' && (
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="bg-gray-50 border-none rounded-xl text-xs focus:ring-2 focus:ring-primary-500/20 px-4 py-2 font-bold text-gray-600"
+                >
+                  <option value="ALL">Todos os Status</option>
+                  <option value="AGUARDANDO_DIRETOR">Aguardando Direção</option>
+                  <option value="AGUARDANDO_COORDENADOR">Aguardando Coordenador</option>
+                  <option value="DEFERIDO">Deferidos</option>
+                  <option value="INDEFERIDO">Indeferidos</option>
+                </select>
+              )}
             </div>
             <div className="flex gap-2">
               {activeTab === 'cursos' && (
@@ -455,6 +596,27 @@ const AdminCoringa: React.FC = () => {
                   <span className="material-symbols-outlined text-lg">add</span>
                   <span className="text-xs uppercase tracking-wider">Adicionar Curso</span>
                 </button>
+              )}
+              {activeTab === 'solicitações' && (
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">title</span>
+                    <input
+                      type="text"
+                      value={pdfTitle}
+                      onChange={(e) => setPdfTitle(e.target.value)}
+                      placeholder="Título do PDF..."
+                      className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all w-64"
+                    />
+                  </div>
+                  <button
+                    onClick={handleExportPDF}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center gap-2 transition-all shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-lg">download</span>
+                    <span className="text-xs uppercase tracking-wider">Exportar PDF</span>
+                  </button>
+                </div>
               )}
               <button onClick={fetchData} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg">
                 <span className="material-symbols-outlined text-xl">refresh</span>
