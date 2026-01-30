@@ -765,16 +765,19 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
                 </button>
               )}
               {activeTab === 'solicitações' && (
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">title</span>
-                    <input
-                      type="text"
-                      value={pdfTitle}
-                      onChange={(e) => setPdfTitle(e.target.value)}
-                      placeholder="Título do PDF..."
-                      className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all w-64"
-                    />
+                <div className="flex items-end gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Título do Relatório (PDF)</label>
+                    <div className="relative">
+                      <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">edit</span>
+                      <input
+                        type="text"
+                        value={pdfTitle}
+                        onChange={(e) => setPdfTitle(e.target.value)}
+                        placeholder="Título do PDF..."
+                        className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all w-64"
+                      />
+                    </div>
                   </div>
                   <button
                     onClick={handleExportPDF}
