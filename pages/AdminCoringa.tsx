@@ -8,6 +8,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import DetailModal from '../components/DetailModal';
 import EditCourseModal from '../components/EditCourseModal';
 import Modal from '../components/Modal';
+import * as XLSX from 'xlsx';
 import { supabase } from '../supabase';
 import { UserProfile, Curso, SolicitacaoDesconto } from '../types';
 import { getDisplayName } from '../utils/nameUtils';
@@ -206,6 +207,42 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
       console.error('Erro no PDF:', err);
       alert('Erro ao gerar PDF: ' + err.message);
     }
+  };
+
+  const handleExportExcel = () => {
+    const filtered = getFilteredSolicitacoes();
+    if (filtered.length === 0) {
+      alert('Nenhuma solicitação encontrada para os filtros atuais.');
+      return;
+    }
+
+    const data = filtered.map(s => {
+      const mensBruta = Number(s.mensalidade_atual || 0);
+      const descPadrao = Number(s.desconto_atual_percent || 0);
+      const liquidoPadrao = mensBruta * (1 - descPadrao / 100);
+
+      return {
+        'Matrícula / CPF': s.cpf_matricula || s.inscricao || 'N/A',
+        'Aluno': (s.nome_aluno || '').toUpperCase(),
+        'Curso': (s.curso?.nome_curso || 'N/A').toUpperCase(),
+        'Consultor': (s.consultor?.nome || s.consultor?.email || 'N/A').toUpperCase(),
+        'Ingresso': (s.tipo_ingresso || 'N/A').toUpperCase(),
+        'Mens. Máxima': mensBruta,
+        'Desc. Padrão (%)': descPadrao,
+        'Mensalidade após Desc. Inicial': liquidoPadrao,
+        'Desc. Solicitado (%)': s.desconto_solicitado_percent || 0,
+        'Valor Solicitado': Number(s.mensalidade_solicitada || 0),
+        'Status': s.status,
+        'Data': new Date(s.criado_em).toLocaleDateString('pt-BR')
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Solicitações');
+
+    const safeTitle = pdfTitle.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    XLSX.writeFile(workbook, `${safeTitle}_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const getFilteredSolicitacoes = () => {
@@ -612,9 +649,18 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
                   <button
                     onClick={handleExportPDF}
                     className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center gap-2 transition-all shadow-sm"
+                    title="Baixar em PDF"
                   >
-                    <span className="material-symbols-outlined text-lg">download</span>
-                    <span className="text-xs uppercase tracking-wider">Exportar PDF</span>
+                    <span className="material-symbols-outlined text-lg">picture_as_pdf</span>
+                    <span className="text-xs uppercase tracking-wider">PDF</span>
+                  </button>
+                  <button
+                    onClick={handleExportExcel}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg flex items-center gap-2 transition-all shadow-sm"
+                    title="Baixar em Excel"
+                  >
+                    <span className="material-symbols-outlined text-lg">table_view</span>
+                    <span className="text-xs uppercase tracking-wider">Excel</span>
                   </button>
                 </div>
               )}
