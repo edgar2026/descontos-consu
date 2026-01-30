@@ -2,33 +2,31 @@
 
 import React, { useEffect, useState } from 'react';
 import StatusBadge from '../components/StatusBadge';
-import { RequestStatus, SolicitacaoDesconto, Curso } from '../types';
+import { RequestStatus, SolicitacaoDesconto, Curso, UserProfile } from '../types';
 import { supabase } from '../supabase';
 
 interface CoordenadorDashboardProps {
   onNavigate: (page: string, params?: any) => void;
+  profile: UserProfile;
 }
 
-const CoordenadorDashboard: React.FC<CoordenadorDashboardProps> = ({ onNavigate }) => {
+const CoordenadorDashboard: React.FC<CoordenadorDashboardProps> = ({ onNavigate, profile }) => {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoDesconto[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [profile]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       // Fetch coordinator's courses
       const { data: coordCursos } = await supabase
         .from('curso_coordenador')
         .select('curso_id')
-        .eq('coordenador_id', user.id);
+        .eq('coordenador_id', profile.id);
 
       const cursoIds = coordCursos?.map(cc => cc.curso_id) || [];
 

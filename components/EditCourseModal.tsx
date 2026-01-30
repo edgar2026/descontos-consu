@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { UserProfile } from '../types';
 
 interface EditCourseModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (course: any) => void;
+    onSave: (course: any, coordenadorId?: string) => void;
     course?: any; // Se fornecido, modo edição. Se null, modo criação
+    coordenadores: UserProfile[];
 }
 
-const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSave, course }) => {
+const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSave, course, coordenadores }) => {
     const [formData, setFormData] = useState({
         nome_curso: '',
         mensalidade_padrao: '',
@@ -15,7 +17,8 @@ const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSa
         desconto_enem: '0',
         desconto_diploma: '0',
         desconto_transferencia: '0',
-        ativo: true
+        ativo: true,
+        coordenador_id: ''
     });
 
     useEffect(() => {
@@ -27,7 +30,8 @@ const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSa
                 desconto_enem: course.desconto_enem?.toString() || '0',
                 desconto_diploma: course.desconto_diploma?.toString() || '0',
                 desconto_transferencia: course.desconto_transferencia?.toString() || '0',
-                ativo: course.ativo ?? true
+                ativo: course.ativo ?? true,
+                coordenador_id: course.coordenador_id || ''
             });
         } else {
             setFormData({
@@ -37,7 +41,8 @@ const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSa
                 desconto_enem: '0',
                 desconto_diploma: '0',
                 desconto_transferencia: '0',
-                ativo: true
+                ativo: true,
+                coordenador_id: ''
             });
         }
     }, [course, isOpen]);
@@ -51,7 +56,7 @@ const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSa
             desconto_enem: parseFloat(formData.desconto_enem),
             desconto_diploma: parseFloat(formData.desconto_diploma),
             desconto_transferencia: parseFloat(formData.desconto_transferencia)
-        });
+        }, formData.coordenador_id);
         onClose();
     };
 
@@ -102,6 +107,22 @@ const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSa
                                     required
                                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                                 />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-gray-500 uppercase">Coordenador Responsável</label>
+                                <select
+                                    value={formData.coordenador_id}
+                                    onChange={(e) => setFormData({ ...formData, coordenador_id: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-bold text-gray-700 bg-white"
+                                >
+                                    <option value="">Nenhum coordenador vinculado</option>
+                                    {coordenadores.map(user => (
+                                        <option key={user.id} value={user.id}>
+                                            {user.nome}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 

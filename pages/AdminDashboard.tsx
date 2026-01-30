@@ -91,8 +91,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
             {[
               { label: 'Gerenciar Usuários', icon: 'group', color: 'bg-indigo-50 text-indigo-600', page: 'gerenciar_usuarios' },
               { label: 'Gerenciar Cursos', icon: 'school', color: 'bg-purple-50 text-purple-600', page: 'gerenciar_cursos' },
-              { label: 'Vincular Cursos', icon: 'hub', color: 'bg-amber-50 text-amber-600', page: 'admin_master' },
-              { label: 'Exportar Relatórios', icon: 'download_for_offline', color: 'bg-primary-50 text-primary-600', page: 'dashboard_admin' },
+              { label: 'Vincular Coordenador', icon: 'hub', color: 'bg-amber-50 text-amber-600', page: 'admin_master' },
+              { label: 'Exportar Relatórios', icon: 'download_for_offline', color: 'bg-primary-50 text-primary-600', page: 'admin_master' },
             ].map((link, i) => (
               <button
                 key={i}

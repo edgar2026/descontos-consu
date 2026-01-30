@@ -1,14 +1,15 @@
 
 import React, { useEffect, useState } from 'react';
 import StatusBadge from '../components/StatusBadge';
-import { RequestStatus, SolicitacaoDesconto, Curso } from '../types';
+import { RequestStatus, SolicitacaoDesconto, Curso, UserProfile } from '../types';
 import { supabase } from '../supabase';
 
 interface HistoricoCoordenadorProps {
     onNavigate: (page: string, params?: any) => void;
+    profile: UserProfile;
 }
 
-const HistoricoCoordenador: React.FC<HistoricoCoordenadorProps> = ({ onNavigate }) => {
+const HistoricoCoordenador: React.FC<HistoricoCoordenadorProps> = ({ onNavigate, profile }) => {
     const [solicitacoes, setSolicitacoes] = useState<SolicitacaoDesconto[]>([]);
     const [cursos, setCursos] = useState<Curso[]>([]);
     const [loading, setLoading] = useState(true);
@@ -17,19 +18,16 @@ const HistoricoCoordenador: React.FC<HistoricoCoordenadorProps> = ({ onNavigate 
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [profile]);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-
             // 1. Get coordinator's courses
             const { data: coordCourses } = await supabase
                 .from('curso_coordenador')
                 .select('curso_id')
-                .eq('coordenador_id', user.id);
+                .eq('coordenador_id', profile.id);
 
             const courseIds = coordCourses?.map(cc => cc.curso_id) || [];
 
@@ -99,7 +97,8 @@ const HistoricoCoordenador: React.FC<HistoricoCoordenadorProps> = ({ onNavigate 
                         <option value="ALL">Todos os Status</option>
                         <option value={RequestStatus.DEFERIDO}>Deferidos</option>
                         <option value={RequestStatus.INDEFERIDO}>Indeferidos</option>
-                        <option value={RequestStatus.EM_ANALISE}>Em Análise</option>
+                        <option value={RequestStatus.AGUARDANDO_COORDENADOR}>Aguardando Coordenador</option>
+                        <option value={RequestStatus.AGUARDANDO_DIRETOR}>Aguardando Diretor</option>
                     </select>
                     <button
                         onClick={fetchData}

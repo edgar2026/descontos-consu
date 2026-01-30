@@ -7,6 +7,7 @@ import StatusBadge from '../components/StatusBadge';
 import ConfirmModal from '../components/ConfirmModal';
 import DetailModal from '../components/DetailModal';
 import EditCourseModal from '../components/EditCourseModal';
+import LinkCoordinatorModal from '../components/LinkCoordinatorModal';
 import Modal from '../components/Modal';
 import * as XLSX from 'xlsx';
 import { supabase } from '../supabase';
@@ -22,6 +23,7 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
   const [usuarios, setUsuarios] = useState<UserProfile[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [solicitacoes, setSolicitacoes] = useState<any[]>([]);
+  const [cursoCoordenadores, setCursoCoordenadores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal States
@@ -29,8 +31,9 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
   const [detailModal, setDetailModal] = useState({ isOpen: false, title: '', data: [] as any[] });
   const [feedbackModal, setFeedbackModal] = useState({ isOpen: false, title: '', message: '', type: 'success' as 'success' | 'error' });
   const [editCourseModal, setEditCourseModal] = useState<{ isOpen: boolean; course: Curso | null }>({ isOpen: false, course: null });
+  const [linkModal, setLinkModal] = useState({ isOpen: false });
 
-  const tabs = ['solicitações', 'usuários', 'cursos'];
+  const tabs = ['solicitações', 'usuários', 'cursos', 'coordenação'];
 
   // Filters
   const [filterText, setFilterText] = useState('');
@@ -45,11 +48,40 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
     setLoading(true);
     try {
       if (activeTab === 'usuários') {
-        const { data } = await supabase.from('users_profile').select('*').order('nome');
+        const { data, error } = await supabase.from('users_profile').select('*').order('nome');
+        if (error) {
+          console.error('Erro ao buscar usuários:', error);
+          alert('Erro ao carregar usuários: ' + error.message);
+        }
         if (data) setUsuarios(data);
       } else if (activeTab === 'cursos') {
-        const { data } = await supabase.from('cursos').select('*').order('nome_curso');
-        if (data) setCursos(data);
+        const { data: cursoData, error } = await supabase.from('cursos').select('*').order('nome_curso');
+        if (error) throw error;
+
+        // Fetch assignments to enrich courses
+        const { data: assignments } = await supabase.from('curso_coordenador').select('*');
+        const enrichedCursos = cursoData?.map(c => ({
+          ...c,
+          coordenador_id: assignments?.find(a => a.curso_id === c.id)?.coordenador_id || ''
+        }));
+
+        const { data: coordinators } = await supabase.from('users_profile').select('*').eq('perfil', 'COORDENADOR');
+        if (coordinators) setUsuarios(coordinators);
+        if (enrichedCursos) setCursos(enrichedCursos);
+      } else if (activeTab === 'coordenação') {
+        const { data: mappings, error: mapError } = await supabase
+          .from('curso_coordenador')
+          .select('*, cursos(nome_curso), users_profile(nome, email)');
+
+        if (mapError) throw mapError;
+        setCursoCoordenadores(mappings || []);
+
+        // Also fetch coordinators and courses for the link modal logic
+        const { data: coordinators } = await supabase.from('users_profile').select('*').eq('perfil', 'COORDENADOR');
+        const { data: allCursos } = await supabase.from('cursos').select('*');
+        if (coordinators) setUsuarios(coordinators);
+        if (allCursos) setCursos(allCursos);
+
       } else if (activeTab === 'solicitações') {
         // Buscar solicitações básicas primeiro
         const { data: solicData, error } = await supabase
@@ -59,6 +91,7 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
 
         if (error) {
           console.error('Erro ao buscar solicitações:', error);
+          alert('Erro ao carregar solicitações: ' + error.message);
           setSolicitacoes([]);
           return;
         }
@@ -255,7 +288,7 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
   };
 
   const handleDelete = async (type: string, id: string, name: string) => {
-    const tables = { usuários: 'users_profile', cursos: 'cursos', solicitações: 'solicitacoes_desconto' };
+    const tables = { usuários: 'users_profile', cursos: 'cursos', solicitações: 'solicitacoes_desconto', coordenação: 'curso_coordenador' };
     const table = tables[type as keyof typeof tables];
 
     setConfirmModal({
@@ -341,29 +374,64 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
     });
   };
 
-  const handleSaveCourse = async (courseData: any) => {
+  const handleSaveCourse = async (courseData: any, coordenadorId?: string) => {
     try {
+      let finalCourseId = editCourseModal.course?.id;
+      // Extrair coordenador_id para não enviar para a tabela 'cursos' que não possui essa coluna
+      const { coordenador_id, ...pureCourseData } = courseData;
+
       if (editCourseModal.course) {
         // Editar curso existente
         const { error } = await supabase
           .from('cursos')
-          .update(courseData)
+          .update(pureCourseData)
           .eq('id', editCourseModal.course.id);
 
         if (error) throw error;
-        setFeedbackModal({ isOpen: true, title: 'Sucesso', message: 'Curso atualizado com sucesso!', type: 'success' });
       } else {
         // Criar novo curso
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('cursos')
-          .insert([courseData]);
+          .insert([pureCourseData])
+          .select()
+          .single();
 
         if (error) throw error;
-        setFeedbackModal({ isOpen: true, title: 'Sucesso', message: 'Curso criado com sucesso!', type: 'success' });
+        finalCourseId = data.id;
       }
 
+      // Sync Coordinator
+      if (finalCourseId) {
+        // Remove existing link (to handle change)
+        await supabase.from('curso_coordenador').delete().eq('curso_id', finalCourseId);
+
+        if (coordenadorId) {
+          await supabase.from('curso_coordenador').insert([{
+            curso_id: finalCourseId,
+            coordenador_id: coordenadorId
+          }]);
+        }
+      }
+
+      setFeedbackModal({ isOpen: true, title: 'Sucesso', message: 'Curso salvo com sucesso!', type: 'success' });
       fetchData();
       setEditCourseModal({ isOpen: false, course: null });
+    } catch (error: any) {
+      setFeedbackModal({ isOpen: true, title: 'Erro', message: error.message, type: 'error' });
+    }
+  };
+
+  const handleLinkCoordinator = async (cursoId: string, coordenadorId: string) => {
+    try {
+      const { error } = await supabase
+        .from('curso_coordenador')
+        .insert([{ curso_id: cursoId, coordenador_id: coordenadorId }]);
+
+      if (error) throw error;
+
+      setFeedbackModal({ isOpen: true, title: 'Sucesso', message: 'Vínculo criado com sucesso!', type: 'success' });
+      setLinkModal({ isOpen: false });
+      fetchData();
     } catch (error: any) {
       setFeedbackModal({ isOpen: true, title: 'Erro', message: error.message, type: 'error' });
     }
@@ -443,6 +511,7 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
               <thead>
                 <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                   <th className="px-6 py-4">Curso</th>
+                  <th className="px-6 py-4">Coordenador</th>
                   <th className="px-6 py-4">Mensalidade</th>
                   <th className="px-6 py-4">Desconto Padrão</th>
                   <th className="px-6 py-4">Status</th>
@@ -450,47 +519,62 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {cursos.map(course => (
-                  <tr key={course.id} className="hover:bg-gray-50/50">
-                    <td className="px-6 py-4 text-sm font-bold text-gray-900">{course.nome_curso}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">R$ {Number(course.mensalidade_padrao).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-primary-600">{course.desconto_padrao}%</td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={async () => {
-                          await supabase.from('cursos').update({ ativo: !course.ativo }).eq('id', course.id);
-                          fetchData();
-                        }}
-                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase ${course.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                          }`}
-                      >
-                        {course.ativo ? 'Ativo' : 'Inativo'}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleViewCourse(course)}
-                          className="p-2 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-lg">visibility</span>
-                        </button>
-                        <button
-                          onClick={() => setEditCourseModal({ isOpen: true, course })}
-                          className="p-2 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-lg">edit</span>
-                        </button>
-                        <button
-                          onClick={() => handleDelete('cursos', course.id, course.nome_curso)}
-                          className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-lg">delete</span>
-                        </button>
+                {cursos.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center justify-center text-gray-400">
+                        <span className="material-symbols-outlined text-6xl mb-4 opacity-20">school</span>
+                        <p className="text-sm font-bold">Nenhum curso encontrado</p>
+                        <p className="text-xs mt-1">Clique em "Adicionar Curso" para começar</p>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  cursos.map(course => (
+                    <tr key={course.id} className="hover:bg-gray-50/50">
+                      <td className="px-6 py-4 text-sm font-bold text-gray-900">{course.nome_curso}</td>
+                      <td className="px-6 py-4 text-xs font-medium text-gray-500 italic">
+                        {usuarios.find(u => u.id === (course as any).coordenador_id)?.nome || 'Não atribuído'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">R$ {Number(course.mensalidade_padrao).toFixed(2)}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-primary-600">{course.desconto_padrao}%</td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={async () => {
+                            await supabase.from('cursos').update({ ativo: !course.ativo }).eq('id', course.id);
+                            fetchData();
+                          }}
+                          className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase ${course.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                            }`}
+                        >
+                          {course.ativo ? 'Ativo' : 'Inativo'}
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleViewCourse(course)}
+                            className="p-2 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-lg">visibility</span>
+                          </button>
+                          <button
+                            onClick={() => setEditCourseModal({ isOpen: true, course })}
+                            className="p-2 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-lg">edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleDelete('cursos', course.id, course.nome_curso)}
+                            className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-lg">delete</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -559,6 +643,52 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
                             <span className="material-symbols-outlined text-lg">delete</span>
                           </button>
                         </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        );
+      case 'coordenação':
+        return (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                  <th className="px-6 py-4">Curso</th>
+                  <th className="px-6 py-4">Coordenador</th>
+                  <th className="px-6 py-4">E-mail</th>
+                  <th className="px-6 py-4 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {cursoCoordenadores.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-20 text-center text-gray-400 font-bold">
+                      Nenhum vínculo encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  cursoCoordenadores.map(mapping => (
+                    <tr key={mapping.id} className="hover:bg-gray-50/50">
+                      <td className="px-6 py-4 text-sm font-bold text-gray-900">{mapping.cursos?.nome_curso}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{mapping.users_profile?.nome}</td>
+                      <td className="px-6 py-4 text-xs text-gray-400 font-mono">{mapping.users_profile?.email}</td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={async () => {
+                            if (confirm('Deseja remover este vínculo?')) {
+                              const { error } = await supabase.from('curso_coordenador').delete().eq('id', mapping.id);
+                              if (error) alert(error.message);
+                              else fetchData();
+                            }
+                          }}
+                          className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-lg">link_off</span>
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -664,6 +794,15 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
                   </button>
                 </div>
               )}
+              {activeTab === 'coordenação' && (
+                <button
+                  onClick={() => setLinkModal({ isOpen: true })}
+                  className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-bold rounded-lg flex items-center gap-2 transition-all shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-lg">add_link</span>
+                  <span className="text-xs uppercase tracking-wider">Vincular Coordenador</span>
+                </button>
+              )}
               <button onClick={fetchData} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg">
                 <span className="material-symbols-outlined text-xl">refresh</span>
               </button>
@@ -705,6 +844,15 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
         onClose={() => setEditCourseModal({ isOpen: false, course: null })}
         onSave={handleSaveCourse}
         course={editCourseModal.course}
+        coordenadores={usuarios.filter(u => u.perfil === 'COORDENADOR')}
+      />
+
+      <LinkCoordinatorModal
+        isOpen={linkModal.isOpen}
+        onClose={() => setLinkModal({ isOpen: false })}
+        onSave={handleLinkCoordinator}
+        cursos={cursos}
+        coordenadores={usuarios.filter(u => u.perfil === 'COORDENADOR')}
       />
     </div>
   );

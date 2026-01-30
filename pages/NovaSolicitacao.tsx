@@ -3,14 +3,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
-import { Curso, RequestStatus } from '../types';
+import { Curso, RequestStatus, UserProfile } from '../types';
 import Modal from '../components/Modal';
 
 interface NovaSolicitacaoProps {
   onBack: () => void;
+  profile: UserProfile;
 }
 
-const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack }) => {
+const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile }) => {
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -98,18 +99,21 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack }) => {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Usuário não autenticado');
-
       const { error } = await supabase
         .from('solicitacoes_desconto')
         .insert({
           ...formData,
           status: RequestStatus.AGUARDANDO_DIRETOR,
-          criado_por: user.id
+          criado_por: profile.id
         });
 
-      if (error) throw error;
+      if (error) {
+        let msg = error.message;
+        if (msg.includes('row-level security')) {
+          msg = 'Erro de permissão: Você não tem autorização para criar esta solicitação. Verifique se seu perfil está ativo ou fale com o Administrador.';
+        }
+        throw new Error(msg);
+      }
 
       setModal({
         isOpen: true,
@@ -122,7 +126,7 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack }) => {
       setModal({
         isOpen: true,
         title: 'Erro ao Criar',
-        message: error.message,
+        message: error instanceof Error ? error.message : 'Ocorreu um erro inesperado ao salvar os dados.',
         type: 'error',
         redirectOnClose: false
       });

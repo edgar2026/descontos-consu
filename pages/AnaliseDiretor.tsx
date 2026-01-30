@@ -64,7 +64,13 @@ const AnaliseDiretor: React.FC<AnaliseDiretorProps> = ({ onBack, solicitationId 
                 .from('comprovantes')
                 .upload(fileName, file, { upsert: true });
 
-            if (uploadError) throw uploadError;
+            if (uploadError) {
+                let msg = uploadError.message;
+                if (msg.includes('row-level security')) {
+                    msg = 'Erro de permissão no armazenamento: Não foi possível enviar o arquivo. O administrador precisa liberar o acesso ao bucket.';
+                }
+                throw new Error(msg);
+            }
 
             // 2. Update solicitation status to AGUARDANDO_COORDENADOR
             const { error: updateError } = await supabase
@@ -75,7 +81,13 @@ const AnaliseDiretor: React.FC<AnaliseDiretorProps> = ({ onBack, solicitationId 
                 })
                 .eq('id', solicitacao.id);
 
-            if (updateError) throw updateError;
+            if (updateError) {
+                let msg = updateError.message;
+                if (msg.includes('row-level security')) {
+                    msg = 'Erro de permissão no banco: Você não tem autorização para atualizar esta solicitação.';
+                }
+                throw new Error(msg);
+            }
 
             setModal({
                 isOpen: true,
@@ -88,7 +100,7 @@ const AnaliseDiretor: React.FC<AnaliseDiretorProps> = ({ onBack, solicitationId 
             setModal({
                 isOpen: true,
                 title: 'Erro ao Salvar',
-                message: error.message,
+                message: error instanceof Error ? error.message : 'Ocorreu um erro inesperado ao salvar os dados.',
                 type: 'error',
                 redirectOnClose: false
             });

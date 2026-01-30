@@ -2,34 +2,32 @@
 
 import React, { useEffect, useState } from 'react';
 import StatusBadge from '../components/StatusBadge';
-import { RequestStatus, SolicitacaoDesconto, Curso } from '../types';
+import { RequestStatus, SolicitacaoDesconto, Curso, UserProfile } from '../types';
 import { supabase } from '../supabase';
 
 interface ConsultorDashboardProps {
   onNavigate: (page: string) => void;
   view?: 'dashboard' | 'list';
+  profile: UserProfile;
 }
 
-const ConsultorDashboard: React.FC<ConsultorDashboardProps> = ({ onNavigate, view = 'dashboard' }) => {
+const ConsultorDashboard: React.FC<ConsultorDashboardProps> = ({ onNavigate, view = 'dashboard', profile }) => {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoDesconto[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [profile]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const [solRes, curRes] = await Promise.all([
         supabase
           .from('solicitacoes_desconto')
           .select('*')
-          .eq('criado_por', user.id)
+          .eq('criado_por', profile.id)
           .order('criado_em', { ascending: false }),
         supabase
           .from('cursos')
@@ -47,7 +45,7 @@ const ConsultorDashboard: React.FC<ConsultorDashboardProps> = ({ onNavigate, vie
 
   const stats = [
     { label: 'Total Geral', value: solicitacoes.length.toString(), icon: 'list_alt', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Em Análise', value: solicitacoes.filter(s => s.status === RequestStatus.EM_ANALISE).length.toString(), icon: 'pending', color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Em Análise', value: solicitacoes.filter(s => s.status === RequestStatus.AGUARDANDO_DIRETOR || s.status === RequestStatus.AGUARDANDO_COORDENADOR).length.toString(), icon: 'pending', color: 'text-amber-600', bg: 'bg-amber-50' },
     { label: 'Deferidos', value: solicitacoes.filter(s => s.status === RequestStatus.DEFERIDO).length.toString(), icon: 'verified', color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Indeferidos', value: solicitacoes.filter(s => s.status === RequestStatus.INDEFERIDO).length.toString(), icon: 'cancel', color: 'text-red-600', bg: 'bg-red-50' },
   ];

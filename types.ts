@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   CONSULTOR = 'CONSULTOR',
@@ -59,3 +58,8 @@ export interface SolicitacaoDesconto {
   atualizado_em: string;
 }
 
+export interface CursoCoordenador {
+  id: string;
+  curso_id: string;
+  coordenador_id: string;
+}
