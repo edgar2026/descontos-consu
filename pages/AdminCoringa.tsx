@@ -32,6 +32,8 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
   const [feedbackModal, setFeedbackModal] = useState({ isOpen: false, title: '', message: '', type: 'success' as 'success' | 'error' });
   const [editCourseModal, setEditCourseModal] = useState<{ isOpen: boolean; course: Curso | null }>({ isOpen: false, course: null });
   const [linkModal, setLinkModal] = useState({ isOpen: false });
+  const [reassignModal, setReassignModal] = useState<{ isOpen: boolean; request: any | null }>({ isOpen: false, request: null });
+  const [selectedConsultantId, setSelectedConsultantId] = useState('');
 
   const tabs = ['solicitações', 'usuários', 'cursos', 'coordenação'];
 
@@ -83,49 +85,26 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
         if (allCursos) setCursos(allCursos);
 
       } else if (activeTab === 'solicitações') {
-        // Buscar solicitações básicas primeiro
-        const { data: solicData, error } = await supabase
-          .from('solicitacoes_desconto')
-          .select('*')
-          .order('criado_em', { ascending: false });
+        const [solicRes, courseRes, userRes] = await Promise.all([
+          supabase.from('solicitacoes_desconto').select('*').order('criado_em', { ascending: false }),
+          supabase.from('cursos').select('id, nome_curso'),
+          supabase.from('users_profile').select('id, nome, email, ativo, perfil')
+        ]);
 
-        if (error) {
-          console.error('Erro ao buscar solicitações:', error);
-          alert('Erro ao carregar solicitações: ' + error.message);
-          setSolicitacoes([]);
-          return;
-        }
+        if (solicRes.error) throw solicRes.error;
 
-        if (solicData && solicData.length > 0) {
-          // Enriquecer com informações de usuários e cursos
-          const enrichedData = await Promise.all(
-            solicData.map(async (req) => {
-              // Buscar consultor - apenas email
-              const { data: consultorData } = await supabase
-                .from('users_profile')
-                .select('email, nome')
-                .eq('id', req.criado_por)
-                .maybeSingle();
+        const courses = courseRes.data || [];
+        const profiles = userRes.data || [];
 
-              // Buscar curso
-              const { data: curso } = await supabase
-                .from('cursos')
-                .select('nome_curso')
-                .eq('id', req.curso_id)
-                .maybeSingle();
+        const enriched = (solicRes.data || []).map(req => ({
+          ...req,
+          consultor: profiles.find(p => p.id === req.criado_por) || null,
+          curso: courses.find(c => c.id === req.curso_id) || { nome_curso: 'N/A' },
+          coordenador: profiles.find(p => p.id === req.analisado_por) || null
+        }));
 
-              return {
-                ...req,
-                consultor: consultorData || null,
-                curso: curso || { nome_curso: 'N/A' }
-              };
-            })
-          );
-
-          setSolicitacoes(enrichedData);
-        } else {
-          setSolicitacoes([]);
-        }
+        setSolicitacoes(enriched);
+        setUsuarios(profiles.filter(p => (p as any).perfil === 'CONSULTOR' && p.ativo));
       }
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
@@ -161,7 +140,7 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
       doc.text(`Filtro: ${statusFilter === 'ALL' ? 'Todos os Status' : statusFilter}`, 14, 33);
 
       const headers = [
-        ['MATRÍCULA / CPF', 'ALUNO', 'CURSO', 'CONSULTOR', 'INGRESSO', 'MENS. MÁXIMA', 'DESC. PADRÃO', 'MENSALIDADE APÓS DESC. INICIAL', 'DESC. SOLIC.', 'VALOR SOLIC.']
+        ['MATRÍCULA / CPF', 'ALUNO', 'CURSO', 'CONSULTOR', 'INGRESSO', 'VALOR CHEIO', 'DESCONTO ATUAL', 'VALOR APÓS DESCONTO ATUAL', 'DESC. SOLIC.', 'VALOR SOLIC.']
       ];
 
       const body = filtered.map(s => {
@@ -226,9 +205,9 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
           1: { cellWidth: 30 }, // ALUNO
           2: { cellWidth: 40 }, // CURSO
           3: { cellWidth: 25 }, // CONSULTOR
-          5: { halign: 'right' }, // MENS. MÁXIMA
-          6: { halign: 'center' }, // DESC. PADRÃO
-          7: { halign: 'right' }, // MENSALIDADE APÓS DESC. INICIAL
+          5: { halign: 'right' }, // VALOR CHEIO
+          6: { halign: 'center' }, // DESCONTO ATUAL
+          7: { halign: 'center' }, // VALOR APÓS DESCONTO ATUAL
           8: { halign: 'center', fontStyle: 'bold' }, // DESC. SOLIC.
           9: { halign: 'right', fontStyle: 'bold' } // VALOR SOLIC.
         }
@@ -260,9 +239,9 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
         'Curso': (s.curso?.nome_curso || 'N/A').toUpperCase(),
         'Consultor': (s.consultor?.nome || s.consultor?.email || 'N/A').toUpperCase(),
         'Ingresso': (s.tipo_ingresso || 'N/A').toUpperCase(),
-        'Mens. Máxima (R$)': mensBruta,
-        'Desc. Padrão (%)': descPadrao,
-        'Mensalidade após Desc. Inicial (R$)': liquidoPadrao,
+        'Valor Cheio (R$)': mensBruta,
+        'Desconto Atual (%)': descPadrao,
+        'Valor Após Desconto Atual (R$)': liquidoPadrao,
         'Desc. Solicitado (%)': s.desconto_solicitado_percent || 0,
         'Valor Solicitado (R$)': Number(s.mensalidade_solicitada || 0),
         'Status': s.status,
@@ -279,8 +258,8 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
       { wch: 30 }, // Curso
       { wch: 25 }, // Consultor
       { wch: 20 }, // Ingresso
-      { wch: 15 }, // Mens. Máxima
-      { wch: 15 }, // Desc. Padrão
+      { wch: 15 }, // Valor Cheio
+      { wch: 15 }, // Desconto Atual
       { wch: 25 }, // Mens. Após Desc
       { wch: 15 }, // Desc. Solicitado
       { wch: 15 }, // Valor Solicitado
@@ -355,8 +334,8 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
       data: [
         { label: 'ID', value: course.id },
         { label: 'Nome do Curso', value: course.nome_curso },
-        { label: 'Mensalidade Padrão', value: `R$ ${Number(course.mensalidade_padrao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
-        { label: 'Desconto Padrão', value: `${course.desconto_padrao}%` },
+        { label: 'Valor Cheio', value: `R$ ${Number(course.mensalidade_padrao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+        { label: 'Desconto Atual', value: `${course.desconto_padrao}%` },
         {
           label: 'Status', value: <span className={`px-3 py-1 rounded-full text-xs font-bold ${course.ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
             }`}>{course.ativo ? 'Ativo' : 'Inativo'}</span>
@@ -375,7 +354,7 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
         { label: 'Curso', value: req.curso?.nome_curso || 'N/A' },
         { label: 'Inscrição', value: req.inscricao },
         { label: 'CPF/Matrícula', value: req.cpf_matricula },
-        { label: 'Mensalidade Atual', value: `R$ ${Number(req.mensalidade_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+        { label: 'Valor Cheio', value: `R$ ${Number(req.mensalidade_atual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
         { label: 'Desconto Atual', value: `${req.desconto_atual_percent}%` },
         { label: 'Mensalidade Solicitada', value: `R$ ${Number(req.mensalidade_solicitada).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
         { label: 'Desconto Solicitado', value: `${req.desconto_solicitado_percent}%` },
@@ -449,6 +428,29 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
 
       setFeedbackModal({ isOpen: true, title: 'Sucesso', message: 'Vínculo criado com sucesso!', type: 'success' });
       setLinkModal({ isOpen: false });
+      fetchData();
+    } catch (error: any) {
+      setFeedbackModal({ isOpen: true, title: 'Erro', message: error.message, type: 'error' });
+    }
+  };
+
+  const handleReassign = async () => {
+    if (!reassignModal.request || !selectedConsultantId) return;
+
+    try {
+      const { error } = await supabase
+        .from('solicitacoes_desconto')
+        .update({
+          criado_por: selectedConsultantId,
+          status: 'REVISAO_CONSULTOR',
+          atualizado_em: new Date().toISOString()
+        })
+        .eq('id', reassignModal.request.id);
+
+      if (error) throw error;
+
+      setFeedbackModal({ isOpen: true, title: 'Sucesso', message: 'Solicitação distribuída com sucesso!', type: 'success' });
+      setReassignModal({ isOpen: false, request: null });
       fetchData();
     } catch (error: any) {
       setFeedbackModal({ isOpen: true, title: 'Erro', message: error.message, type: 'error' });
@@ -530,8 +532,8 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
                 <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                   <th className="px-6 py-4">Curso</th>
                   <th className="px-6 py-4">Coordenador</th>
-                  <th className="px-6 py-4">Mensalidade</th>
-                  <th className="px-6 py-4">Desconto Padrão</th>
+                  <th className="px-6 py-4">Valor Cheio</th>
+                  <th className="px-6 py-4">Desconto Atual</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Ações</th>
                 </tr>
@@ -648,15 +650,24 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
                           <button
                             onClick={() => handleViewRequest(req)}
                             className="p-2 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors"
+                            title="Visualizar"
                           >
                             <span className="material-symbols-outlined text-lg">visibility</span>
                           </button>
-                          <button className="p-2 hover:bg-primary-50 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
-                            <span className="material-symbols-outlined text-lg">edit</span>
+                          <button
+                            onClick={() => {
+                              setSelectedConsultantId(req.criado_por);
+                              setReassignModal({ isOpen: true, request: req });
+                            }}
+                            className="p-2 hover:bg-purple-50 rounded-lg text-gray-400 hover:text-purple-600 transition-colors"
+                            title="Devolver para Consultor"
+                          >
+                            <span className="material-symbols-outlined text-lg">assignment_return</span>
                           </button>
                           <button
                             onClick={() => handleDelete('solicitações', req.id, req.nome_aluno)}
                             className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors"
+                            title="Excluir"
                           >
                             <span className="material-symbols-outlined text-lg">delete</span>
                           </button>
@@ -767,6 +778,7 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
                   <option value="ALL">Todos os Status</option>
                   <option value="AGUARDANDO_DIRETOR">Aguardando Direção</option>
                   <option value="AGUARDANDO_COORDENADOR">Aguardando Coordenador</option>
+                  <option value="REVISAO_CONSULTOR">Revisão Consultor</option>
                   <option value="DEFERIDO">Deferidos</option>
                   <option value="INDEFERIDO">Indeferidos</option>
                 </select>
@@ -875,6 +887,60 @@ const AdminCoringa: React.FC<AdminCoringaProps> = ({ onNavigate }) => {
         cursos={cursos}
         coordenadores={usuarios.filter(u => u.perfil === 'COORDENADOR')}
       />
+
+      {/* Reassign Modal */}
+      {reassignModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-white/20 overflow-hidden transform transition-all">
+            <div className="p-8 space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="size-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-2xl">assignment_return</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-gray-900">Distribuir Solicitação</h3>
+                  <p className="text-gray-500 text-sm">Selecione o consultor que será responsável por esta solicitação.</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-1">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Aluno</p>
+                <p className="text-sm font-bold text-gray-900">{reassignModal.request?.nome_aluno}</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Consultor Destino</label>
+                <select
+                  value={selectedConsultantId}
+                  onChange={(e) => setSelectedConsultantId(e.target.value)}
+                  className="w-full bg-gray-50 border-none rounded-2xl py-4 px-4 text-sm font-bold focus:ring-2 focus:ring-purple-500/20"
+                >
+                  <option value="">Selecione um consultor...</option>
+                  {usuarios.filter(u => u.perfil === 'CONSULTOR').map(u => (
+                    <option key={u.id} value={u.id}>{u.nome} ({u.email})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-4">
+                <button
+                  onClick={() => setReassignModal({ isOpen: false, request: null })}
+                  className="py-3 px-4 rounded-xl font-bold text-gray-400 hover:text-gray-600 transition-colors uppercase text-[10px] tracking-widest"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleReassign}
+                  disabled={!selectedConsultantId}
+                  className="py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-lg shadow-purple-600/20 transition-all uppercase text-[10px] tracking-widest disabled:opacity-50"
+                >
+                  Confirmar Envio
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

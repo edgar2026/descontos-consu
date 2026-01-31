@@ -45,7 +45,8 @@ const ConsultorDashboard: React.FC<ConsultorDashboardProps> = ({ onNavigate, vie
 
   const stats = [
     { label: 'Total Geral', value: solicitacoes.length.toString(), icon: 'list_alt', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Em Análise', value: solicitacoes.filter(s => s.status === RequestStatus.AGUARDANDO_DIRETOR || s.status === RequestStatus.AGUARDANDO_COORDENADOR).length.toString(), icon: 'pending', color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Em Análise', value: solicitacoes.filter(s => s.status === RequestStatus.AGUARDANDO_DIRETOR || s.status === RequestStatus.AGUARDANDO_COORDENADOR || s.status === RequestStatus.EM_ANALISE).length.toString(), icon: 'pending', color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Revisão', value: solicitacoes.filter(s => s.status === RequestStatus.REVISAO_CONSULTOR).length.toString(), icon: 'rate_review', color: 'text-purple-600', bg: 'bg-purple-50' },
     { label: 'Deferidos', value: solicitacoes.filter(s => s.status === RequestStatus.DEFERIDO).length.toString(), icon: 'verified', color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Indeferidos', value: solicitacoes.filter(s => s.status === RequestStatus.INDEFERIDO).length.toString(), icon: 'cancel', color: 'text-red-600', bg: 'bg-red-50' },
   ];
@@ -158,9 +159,16 @@ const ConsultorDashboard: React.FC<ConsultorDashboardProps> = ({ onNavigate, vie
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => onNavigate('visualizar_solicitacao', { solicitacaoId: req.id })}
-                          className="p-1.5 text-gray-400 hover:text-primary-600" title="Visualizar">
+                          className="p-1.5 text-gray-400 hover:text-primary-600 transition-colors" title="Visualizar">
                           <span className="material-symbols-outlined text-xl">visibility</span>
                         </button>
+                        {req.status === RequestStatus.REVISAO_CONSULTOR && (
+                          <button
+                            onClick={() => onNavigate('nova_solicitacao', { solicitacaoId: req.id })}
+                            className="p-1.5 text-purple-400 hover:text-purple-600 transition-colors" title="Editar / Corrigir">
+                            <span className="material-symbols-outlined text-xl">edit_note</span>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

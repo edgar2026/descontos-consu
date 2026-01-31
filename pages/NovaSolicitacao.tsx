@@ -9,9 +9,10 @@ import Modal from '../components/Modal';
 interface NovaSolicitacaoProps {
   onBack: () => void;
   profile: UserProfile;
+  solicitacaoId?: string;
 }
 
-const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile }) => {
+const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile, solicitacaoId }) => {
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -32,11 +33,43 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile }) =>
 
   useEffect(() => {
     fetchCursos();
-  }, []);
+    if (solicitacaoId) fetchSolicitacao();
+  }, [solicitacaoId]);
 
   const fetchCursos = async () => {
     const { data } = await supabase.from('cursos').select('*').eq('ativo', true).order('nome_curso', { ascending: true });
     if (data) setCursos(data);
+  };
+
+  const fetchSolicitacao = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('solicitacoes_desconto')
+        .select('*')
+        .eq('id', solicitacaoId)
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setFormData({
+          inscricao: data.inscricao,
+          cpf_matricula: data.cpf_matricula,
+          nome_aluno: data.nome_aluno,
+          tipo_ingresso: data.tipo_ingresso,
+          curso_id: data.curso_id,
+          mensalidade_atual: Number(data.mensalidade_atual),
+          desconto_atual_percent: Number(data.desconto_atual_percent),
+          mensalidade_solicitada: Number(data.mensalidade_solicitada),
+          desconto_solicitado_percent: Number(data.desconto_solicitado_percent),
+          observacoes: data.observacoes || '',
+        });
+      }
+    } catch (error: any) {
+      console.error('Erro ao buscar solicitação:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const calculateDefaultDiscount = (curso: Curso, tipoIngresso: string) => {
@@ -99,33 +132,56 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile }) =>
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('solicitacoes_desconto')
-        .insert({
-          ...formData,
-          status: RequestStatus.AGUARDANDO_DIRETOR,
-          criado_por: profile.id
+      if (solicitacaoId) {
+        // Modo Edição (Update)
+        const { error } = await supabase
+          .from('solicitacoes_desconto')
+          .update({
+            ...formData,
+            status: RequestStatus.AGUARDANDO_DIRETOR, // Retorna para análise ao editar
+            atualizado_em: new Date().toISOString()
+          })
+          .eq('id', solicitacaoId);
+
+        if (error) throw error;
+
+        setModal({
+          isOpen: true,
+          title: 'Solicitação Atualizada!',
+          message: 'As alterações foram salvas e o pedido reenviado para análise.',
+          type: 'success',
+          redirectOnClose: true
         });
+      } else {
+        // Novo Registro (Insert)
+        const { error } = await supabase
+          .from('solicitacoes_desconto')
+          .insert({
+            ...formData,
+            status: RequestStatus.AGUARDANDO_DIRETOR,
+            criado_por: profile.id
+          });
 
-      if (error) {
-        let msg = error.message;
-        if (msg.includes('row-level security')) {
-          msg = 'Erro de permissão: Você não tem autorização para criar esta solicitação. Verifique se seu perfil está ativo ou fale com o Administrador.';
+        if (error) {
+          let msg = error.message;
+          if (msg.includes('row-level security')) {
+            msg = 'Erro de permissão: Você não tem autorização para criar esta solicitação. Verifique se seu perfil está ativo ou fale com o Administrador.';
+          }
+          throw new Error(msg);
         }
-        throw new Error(msg);
-      }
 
-      setModal({
-        isOpen: true,
-        title: 'Solicitação Criada!',
-        message: 'O pedido de desconto foi enviado para análise do coordenador.',
-        type: 'success',
-        redirectOnClose: true
-      });
+        setModal({
+          isOpen: true,
+          title: 'Solicitação Criada!',
+          message: 'O pedido de desconto foi enviado para análise do coordenador.',
+          type: 'success',
+          redirectOnClose: true
+        });
+      }
     } catch (error: any) {
       setModal({
         isOpen: true,
-        title: 'Erro ao Criar',
+        title: solicitacaoId ? 'Erro ao Atualizar' : 'Erro ao Criar',
         message: error instanceof Error ? error.message : 'Ocorreu um erro inesperado ao salvar os dados.',
         type: 'error',
         redirectOnClose: false
@@ -148,8 +204,8 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile }) =>
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight">Nova Solicitação</h2>
-          <p className="text-gray-500">Preencha todos os campos para iniciar o processo de análise.</p>
+          <h2 className="text-3xl font-black text-gray-900 tracking-tight">{solicitacaoId ? 'Editar Solicitação' : 'Nova Solicitação'}</h2>
+          <p className="text-gray-500">{solicitacaoId ? 'Revise os dados antes de reenviar para análise.' : 'Preencha todos os campos para iniciar o processo de análise.'}</p>
         </div>
       </div>
 
@@ -336,7 +392,7 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile }) =>
                 disabled={loading}
                 className="w-full py-4 bg-gray-900 hover:bg-black text-white font-black rounded-2xl shadow-xl transition-all disabled:opacity-50 uppercase tracking-widest text-xs"
               >
-                {loading ? 'PROCESSANDO...' : 'CRIAR SOLICITAÇÃO'}
+                {loading ? 'PROCESSANDO...' : solicitacaoId ? 'SALVAR ALTERAÇÕES' : 'CRIAR SOLICITAÇÃO'}
               </button>
               <button
                 type="button"

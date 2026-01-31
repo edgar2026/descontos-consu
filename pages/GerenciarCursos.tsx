@@ -112,8 +112,8 @@ const GerenciarCursos: React.FC = () => {
             <thead>
               <tr className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                 <th className="px-6 py-4">Curso</th>
-                <th className="px-6 py-4">Mensalidade Padrão</th>
-                <th className="px-6 py-4">Desconto Padrão</th>
+                <th className="px-6 py-4">Valor Cheio</th>
+                <th className="px-6 py-4">Desconto Atual</th>
                 <th className="px-6 py-4">Coordenador Vinculado</th>
                 <th className="px-6 py-4 text-right">Ações</th>
               </tr>

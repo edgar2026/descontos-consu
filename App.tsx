@@ -142,7 +142,7 @@ const App: React.FC = () => {
       case 'solicitacoes':
         return <ConsultorDashboard onNavigate={handleNavigate} view="list" profile={profile!} />;
       case 'nova_solicitacao':
-        return <NovaSolicitacao onBack={() => handleNavigate('dashboard_consultor')} profile={profile!} />;
+        return <NovaSolicitacao onBack={() => handleNavigate('dashboard_consultor')} profile={profile!} solicitacaoId={navigationParams?.solicitacaoId} />;
       case 'visualizar_solicitacao':
         return <VisualizarSolicitacao onBack={() => handleNavigate('dashboard_consultor')} solicitationId={navigationParams?.solicitacaoId} />;
 
