@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile } from '../types';
+import { UserRole, UserProfile, Curso } from '../types';
+import { formatCurrency, parseCurrencyToNumber } from '../utils/formatters';
 
 interface EditCourseModalProps {
     isOpen: boolean;
@@ -51,11 +52,11 @@ const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSa
         e.preventDefault();
         onSave({
             ...formData,
-            mensalidade_padrao: parseFloat(formData.mensalidade_padrao),
-            desconto_padrao: parseFloat(formData.desconto_padrao),
-            desconto_enem: parseFloat(formData.desconto_enem),
-            desconto_diploma: parseFloat(formData.desconto_diploma),
-            desconto_transferencia: parseFloat(formData.desconto_transferencia)
+            mensalidade_padrao: parseFloat(formData.mensalidade_padrao.replace(',', '.')),
+            desconto_padrao: parseFloat(formData.desconto_padrao.replace(',', '.')),
+            desconto_enem: parseFloat(formData.desconto_enem.replace(',', '.')),
+            desconto_diploma: parseFloat(formData.desconto_diploma.replace(',', '.')),
+            desconto_transferencia: parseFloat(formData.desconto_transferencia.replace(',', '.'))
         }, formData.coordenador_id);
         onClose();
     };
@@ -99,13 +100,13 @@ const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSa
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase">Valor Cheio (R$)</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.mensalidade_padrao}
-                                    onChange={(e) => setFormData({ ...formData, mensalidade_padrao: e.target.value })}
-                                    placeholder="1000.00"
+                                    type="text"
+                                    value={formatCurrency(Number(formData.mensalidade_padrao) || 0)}
+                                    onChange={(e) => setFormData({ ...formData, mensalidade_padrao: parseCurrencyToNumber(e.target.value).toString() })}
+                                    onFocus={(e) => e.target.select()}
+                                    placeholder="0,00"
                                     required
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-right"
                                 />
                             </div>
 
@@ -133,49 +134,41 @@ const EditCourseModal: React.FC<EditCourseModalProps> = ({ isOpen, onClose, onSa
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase">Vestibular (Atual)</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max="100"
+                                    type="text"
                                     value={formData.desconto_padrao}
-                                    onChange={(e) => setFormData({ ...formData, desconto_padrao: e.target.value })}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500"
+                                    onChange={(e) => setFormData({ ...formData, desconto_padrao: e.target.value.replace(/[^0-9,]/g, '') })}
+                                    onFocus={(e) => e.target.select()}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none text-right"
                                 />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase">ENEM</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max="100"
+                                    type="text"
                                     value={formData.desconto_enem}
-                                    onChange={(e) => setFormData({ ...formData, desconto_enem: e.target.value })}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500"
+                                    onChange={(e) => setFormData({ ...formData, desconto_enem: e.target.value.replace(/[^0-9,]/g, '') })}
+                                    onFocus={(e) => e.target.select()}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none text-right"
                                 />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase">Portador de Diploma</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max="100"
+                                    type="text"
                                     value={formData.desconto_diploma}
-                                    onChange={(e) => setFormData({ ...formData, desconto_diploma: e.target.value })}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500"
+                                    onChange={(e) => setFormData({ ...formData, desconto_diploma: e.target.value.replace(/[^0-9,]/g, '') })}
+                                    onFocus={(e) => e.target.select()}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none text-right"
                                 />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase">Transferência</label>
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max="100"
+                                    type="text"
                                     value={formData.desconto_transferencia}
-                                    onChange={(e) => setFormData({ ...formData, desconto_transferencia: e.target.value })}
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500"
+                                    onChange={(e) => setFormData({ ...formData, desconto_transferencia: e.target.value.replace(/[^0-9,]/g, '') })}
+                                    onFocus={(e) => e.target.select()}
+                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none text-right"
                                 />
                             </div>
                         </div>

@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { Curso, RequestStatus, UserProfile } from '../types';
 import Modal from '../components/Modal';
+import { formatCurrency, maskCurrencyInput, parseCurrencyToNumber } from '../utils/formatters';
 
 interface NovaSolicitacaoProps {
   onBack: () => void;
@@ -320,11 +321,12 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile, soli
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">R$</span>
                       <input
-                        type="number"
+                        type="text"
                         required
-                        value={formData.mensalidade_atual}
-                        onChange={e => setFormData({ ...formData, mensalidade_atual: Number(e.target.value) })}
-                        className="w-full rounded-2xl border-gray-100 bg-gray-50/50 py-3 pl-10 pr-4 text-sm font-bold focus:ring-2 focus:ring-primary-500/20"
+                        value={formatCurrency(formData.mensalidade_atual)}
+                        onChange={e => setFormData({ ...formData, mensalidade_atual: parseCurrencyToNumber(e.target.value) })}
+                        onFocus={(e) => e.target.select()}
+                        className="w-full rounded-2xl border-gray-100 bg-gray-50/50 py-3 pl-9 pr-3 text-sm font-bold focus:ring-2 focus:ring-primary-500/20 outline-none text-right"
                       />
                     </div>
                   </div>
@@ -332,13 +334,17 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile, soli
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider h-7 flex items-end">Desconto Atual (%)</label>
                     <div className="relative">
                       <input
-                        type="number"
+                        type="text"
                         required
-                        value={formData.desconto_atual_percent}
-                        onChange={e => setFormData({ ...formData, desconto_atual_percent: Number(e.target.value) })}
-                        className="w-full rounded-2xl border-gray-100 bg-gray-50/50 py-3 px-4 pr-10 text-sm font-bold focus:ring-2 focus:ring-primary-500/20"
+                        value={formData.desconto_atual_percent.toLocaleString('pt-BR')}
+                        onChange={e => {
+                          const val = e.target.value.replace(/[^0-9,]/g, '').replace(',', '.');
+                          setFormData({ ...formData, desconto_atual_percent: val === '' ? 0 : Number(val) });
+                        }}
+                        onFocus={(e) => e.target.select()}
+                        className="w-full rounded-2xl border-gray-100 bg-gray-50/50 py-3 px-3 pr-8 text-sm font-bold focus:ring-2 focus:ring-primary-500/20 outline-none text-right"
                       />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">%</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">%</span>
                     </div>
                   </div>
                 </div>
@@ -351,7 +357,7 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile, soli
                       type="text"
                       readOnly
                       value={(formData.mensalidade_atual * (1 - formData.desconto_atual_percent / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      className="w-full rounded-2xl border-emerald-100 bg-emerald-50/30 py-3 pl-10 pr-4 text-sm font-black text-emerald-700 cursor-default focus:ring-0"
+                      className="w-full rounded-2xl border-emerald-100 bg-emerald-50/30 py-3 pl-9 pr-3 text-sm font-black text-emerald-700 cursor-default focus:ring-0 text-right"
                     />
                   </div>
                 </div>
@@ -366,7 +372,7 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile, soli
                       type="text"
                       readOnly
                       value={formData.mensalidade_solicitada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      className="w-full rounded-xl border-none bg-white/10 py-3 pl-10 pr-4 text-sm font-black text-white focus:ring-0 cursor-default"
+                      className="w-full rounded-xl border-none bg-white/10 py-3 pl-9 pr-3 text-sm font-black text-white focus:ring-0 cursor-default text-right"
                     />
                   </div>
                 </div>
@@ -374,13 +380,17 @@ const NovaSolicitacao: React.FC<NovaSolicitacaoProps> = ({ onBack, profile, soli
                   <label className="text-[10px] font-black opacity-70 uppercase tracking-wider">Desconto Solicitado</label>
                   <div className="relative">
                     <input
-                      type="number"
+                      type="text"
                       required
-                      value={formData.desconto_solicitado_percent}
-                      onChange={e => setFormData({ ...formData, desconto_solicitado_percent: Number(e.target.value) })}
-                      className="w-full rounded-xl border-none bg-white/10 py-3 px-4 pr-10 text-sm font-black text-white focus:ring-2 focus:ring-white/20"
+                      value={formData.desconto_solicitado_percent.toLocaleString('pt-BR')}
+                      onChange={e => {
+                        const val = e.target.value.replace(/[^0-9,]/g, '').replace(',', '.');
+                        setFormData({ ...formData, desconto_solicitado_percent: val === '' ? 0 : Number(val) });
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full rounded-xl border-none bg-white/10 py-3 px-3 pr-8 text-sm font-black text-white focus:ring-2 focus:ring-white/20 outline-none text-right"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 text-xs font-bold">%</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 text-xs font-bold">%</span>
                   </div>
                 </div>
               </div>

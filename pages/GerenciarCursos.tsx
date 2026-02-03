@@ -6,6 +6,7 @@ import { UserRole, UserProfile, Curso } from '../types';
 import { supabase } from '../supabase';
 import Modal from '../components/Modal';
 import EditCourseModal from '../components/EditCourseModal';
+import { formatCurrency, parseCurrencyToNumber } from '../utils/formatters';
 
 const GerenciarCursos: React.FC = () => {
   const [cursos, setCursos] = useState<Curso[]>([]);
@@ -136,32 +137,34 @@ const GerenciarCursos: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-400">R$</span>
                         <input
-                          type="number"
-                          defaultValue={course.mensalidade_padrao}
+                          type="text"
+                          defaultValue={formatCurrency(course.mensalidade_padrao)}
+                          onFocus={(e) => e.target.select()}
                           onBlur={async (e) => {
-                            const val = Number(e.target.value);
+                            const val = parseCurrencyToNumber(e.target.value);
                             if (val !== course.mensalidade_padrao) {
                               await supabase.from('cursos').update({ mensalidade_padrao: val }).eq('id', course.id);
                               fetchData();
                             }
                           }}
-                          className="w-24 text-sm font-bold border-none bg-gray-50 rounded-lg py-1 px-2 focus:ring-2 focus:ring-primary-500/20"
+                          className="w-32 text-sm font-bold border-none bg-gray-50 rounded-lg py-1 px-2 focus:ring-2 focus:ring-primary-500/20 text-right outline-none"
                         />
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <input
-                          type="number"
-                          defaultValue={course.desconto_padrao}
+                          type="text"
+                          defaultValue={course.desconto_padrao.toLocaleString('pt-BR')}
+                          onFocus={(e) => e.target.select()}
                           onBlur={async (e) => {
-                            const val = Number(e.target.value);
-                            if (val !== course.desconto_padrao) {
+                            const val = parseFloat(e.target.value.replace(/[^0-9,]/g, '').replace(',', '.'));
+                            if (!isNaN(val) && val !== course.desconto_padrao) {
                               await supabase.from('cursos').update({ desconto_padrao: val }).eq('id', course.id);
                               fetchData();
                             }
                           }}
-                          className="w-16 text-sm font-bold border-none bg-gray-50 rounded-lg py-1 px-2 focus:ring-2 focus:ring-primary-500/20 text-center"
+                          className="w-16 text-sm font-bold border-none bg-gray-50 rounded-lg py-1 px-2 focus:ring-2 focus:ring-primary-500/20 text-right outline-none"
                         />
                         <span className="text-xs text-gray-400">%</span>
                       </div>
