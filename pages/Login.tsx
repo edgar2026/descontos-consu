@@ -22,6 +22,7 @@ const Login: React.FC = () => {
     setError(null);
     try {
       const result = await signIn.create({ identifier: email, password });
+      console.log('Clerk SignIn Result:', result);
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
       } else if (result.status === 'needs_second_factor') {
